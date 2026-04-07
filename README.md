@@ -1,69 +1,54 @@
-# Welcome to your Lovable project
+# Real Estate CRM
 
-## Project info
+A real estate CRM application built with React, TypeScript, and Supabase. Supports multi-tenant agent onboarding, lead management, CRM contacts/activities, marketing campaigns, sales funnel tracking, and property listings.
 
-**URL**: https://lovable.dev/projects/400f32cc-130c-444e-989c-7600cf6f6fb4
+## Tech Stack
 
-## How can I edit this code?
+- **Frontend:** Vite + React 18 + TypeScript
+- **Styling:** Tailwind CSS + shadcn-ui
+- **State/Data:** TanStack React Query
+- **Backend:** Supabase (Auth, PostgreSQL, Storage, Edge Functions)
+- **Automation:** Make.com (webhook integrations)
+- **Internal tooling:** Retool dashboards
 
-There are several ways of editing your application.
+## Local Development
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/400f32cc-130c-444e-989c-7600cf6f6fb4) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Requirements: Node.js ≥ 18 and npm (or [Bun](https://bun.sh))
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
+# Clone the repository
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+bun install   # or: npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Start the dev server (localhost:8080)
+bun run dev   # or: npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Available Scripts
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| Command | Description |
+|---|---|
+| `bun run dev` | Start development server |
+| `bun run build` | Production build |
+| `bun run lint` | Run ESLint |
+| `bun run test` | Run Vitest tests |
+| `bun run preview` | Preview production build |
 
-**Use GitHub Codespaces**
+## Environment Variables
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+No `.env` file is needed for the frontend — Supabase credentials are embedded in `src/integrations/supabase/client.ts` (standard for public Supabase projects).
 
-## What technologies are used for this project?
+Supabase Edge Functions require:
+```
+RESEND_API_KEY=<your_resend_key>
+```
+Set via the Supabase dashboard: Project Settings → Edge Functions → Secrets.
 
-This project is built with .
+## Deployment
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Deploy via your preferred hosting provider (Netlify, Vercel, etc.) by running `bun run build` and serving the `dist/` directory.
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/400f32cc-130c-444e-989c-7600cf6f6fb4) and click on Share -> Publish.
-
-## I want to use a custom domain - is that possible?
-
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+For custom domains, configure DNS through your hosting provider.

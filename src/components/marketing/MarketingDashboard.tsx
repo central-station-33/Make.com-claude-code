@@ -37,7 +37,7 @@ const MarketingDashboard = () => {
     <Card className="p-6">
       <div className="flex items-center space-x-4 mb-6">
         <img 
-          src="/lovable-uploads/9426cd2c-3e5d-46c0-8df6-12e24c277730.png" 
+          src="/uploads/9426cd2c-3e5d-46c0-8df6-12e24c277730.png" 
           alt="JRA Logo" 
           className="h-12 w-auto"
         />

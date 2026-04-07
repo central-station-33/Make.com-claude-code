@@ -41,7 +41,7 @@ const CRMDashboard = () => {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-6">
         <div className="flex items-center space-x-4">
           <img 
-            src="/lovable-uploads/9426cd2c-3e5d-46c0-8df6-12e24c277730.png" 
+            src="/uploads/9426cd2c-3e5d-46c0-8df6-12e24c277730.png" 
             alt="JRA Logo" 
             className="h-12 w-auto"
           />

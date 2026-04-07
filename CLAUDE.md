@@ -4,7 +4,7 @@ This file provides guidance for AI assistants working in this repository.
 
 ## Project Overview
 
-A real estate CRM application built with React/TypeScript and Supabase. It supports multi-tenant agent onboarding, lead management, CRM contacts/activities, marketing campaigns, sales funnel tracking, and property listings. The project was scaffolded via [Lovable](https://lovable.dev).
+A real estate CRM application built with React/TypeScript and Supabase. It supports multi-tenant agent onboarding, lead management, CRM contacts/activities, marketing campaigns, sales funnel tracking, and property listings. Automation is handled via Make.com webhooks and internal tooling is built on Retool.
 
 ---
 
