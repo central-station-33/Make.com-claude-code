@@ -9,7 +9,7 @@ A real estate CRM application built with React, TypeScript, and Supabase. Suppor
 - **State/Data:** TanStack React Query
 - **Backend:** Supabase (Auth, PostgreSQL, Storage, Edge Functions)
 - **Automation:** Make.com (webhook integrations)
-- **Internal tooling:** Retool dashboards
+- **Internal tooling:** [Retool](https://jrapaid.retool.com)
 
 ## Local Development
 

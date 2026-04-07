@@ -26,7 +26,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Email and token are required");
     }
 
-    const baseUrl = Deno.env.get("APP_BASE_URL") ?? "https://your-app-domain.com";
+    const baseUrl = Deno.env.get("APP_BASE_URL") ?? "https://jrapaid.retool.com";
     const inviteUrl = `${baseUrl}/auth?invite=${token}`;
     
     console.log("Sending invitation email to:", email);
