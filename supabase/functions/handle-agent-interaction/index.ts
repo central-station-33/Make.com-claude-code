@@ -34,7 +34,10 @@ serve(async (req) => {
       ? `\nAvailable tools:\n${availableTools.map(t => `- ${t.name}: ${t.type}`).join('\n')}`
       : '';
 
-    // Call Anthropic Claude API
+    // Call Anthropic Claude API with a 25s timeout to stay within Make.com's webhook window
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -43,14 +46,15 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: `${agent.system_prompt}${toolsDescription}\nWhen using tools, mention them explicitly in your response.`,
         messages: [
           { role: 'user', content: input }
         ],
       }),
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!claudeResponse.ok) {
       const error = await claudeResponse.json();
