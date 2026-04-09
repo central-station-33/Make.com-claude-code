@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
 
 const corsHeaders = {
@@ -35,41 +34,38 @@ serve(async (req) => {
       ? `\nAvailable tools:\n${availableTools.map(t => `- ${t.name}: ${t.type}`).join('\n')}`
       : '';
 
-    // Call OpenAI API
-    const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Call Anthropic Claude API
+    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '',
+        'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'claude-opus-4-6',
+        max_tokens: 1024,
+        system: `${agent.system_prompt}${toolsDescription}\nWhen using tools, mention them explicitly in your response.`,
         messages: [
-          { 
-            role: 'system', 
-            content: `${agent.system_prompt}${toolsDescription}\nWhen using tools, mention them explicitly in your response.` 
-          },
           { role: 'user', content: input }
         ],
-        temperature: 0.7,
-        max_tokens: 1000,
       }),
     });
 
-    if (!openAIResponse.ok) {
-      const error = await openAIResponse.json();
-      throw new Error(error.error?.message || 'OpenAI API error');
+    if (!claudeResponse.ok) {
+      const error = await claudeResponse.json();
+      throw new Error(error.error?.message || 'Anthropic API error');
     }
 
-    const openAIData = await openAIResponse.json();
-    const output = openAIData.choices[0].message.content;
+    const claudeData = await claudeResponse.json();
+    const output = claudeData.content[0].text;
 
     // Log the interaction
     await supabaseClient
       .from('system_logs')
       .insert({
         action: 'agent_interaction',
-        details: `Agent ${agent.name} processed user input with ${availableTools?.length || 0} tools`,
+        details: `Agent ${agent.name} processed user input via Claude with ${availableTools?.length || 0} tools`,
         type: 'system'
       });
 
