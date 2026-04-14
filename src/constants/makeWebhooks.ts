@@ -5,6 +5,18 @@
  * the x-make-apikey header.  Each entry maps to an active Make.com
  * scenario that handles intake, scoring, or follow-up for leads and
  * agent recruits.
+ *
+ * Scheduled (non-webhook) scenarios — managed directly in Make.com:
+ *   3995903  Gov Open Data Ingest — NY/NJ Full Public Stack
+ *            Runs daily at 2 AM. Fetches up to 2,000 records per
+ *            configured endpoint via a VALUES-based endpoint registry
+ *            (edit the SQL in module 1 to add new sources). Uses
+ *            INSERT … ON CONFLICT (license_number) DO UPDATE for
+ *            deduplication. Add new endpoints by inserting extra rows
+ *            in the VALUES clause — no extra modules needed.
+ *            To add pagination for datasets > 2,000 records, duplicate
+ *            modules 3-7 with $offset=2000, 4000, etc., or migrate the
+ *            endpoint registry to a postgres ingest_sources table.
  */
 
 export const MAKE_WEBHOOKS = {
