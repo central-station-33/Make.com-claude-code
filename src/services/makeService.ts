@@ -80,13 +80,28 @@ export interface FollowUpNurturePayload {
   follow_up_number: number;
 }
 
-/** Scored lead response fields */
+/**
+ * Scored lead response fields.
+ *
+ * When returned by `refreshLeadScore`, the scenario also fires two
+ * downstream actions automatically:
+ *   - POSTs to Retool with `action_required` so Retool can trigger
+ *     Slack/SMS alerts for hot leads or enqueue warm leads.
+ *   - POSTs to the Follow-Up Nurture webhook (closed loop):
+ *       prediction_score >= 50  → sequence_type "initial"
+ *       prediction_score <  50  → sequence_type "long_term_nurture"
+ */
 export interface LeadScoringResult extends MakeWebhookResponse {
-  lead_id?: number;
+  lead_id?: number | string;
+  prior_score?: number;
   prediction_score?: number;
   quality_tier?: 'A' | 'B' | 'C' | 'D';
   urgency?: 'high' | 'medium' | 'low';
   recommended_action?: string;
+  /** Computed routing decision returned by the score-refresh scenario */
+  action_required?: 'hot_alert' | 'warm_nurture' | 'cold_suppress';
+  /** True when the nurture webhook was triggered as part of this call */
+  nurture_triggered?: boolean;
 }
 
 /** Scored recruit response fields */
