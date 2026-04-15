@@ -89,6 +89,17 @@ export const MAKE_WEBHOOKS = {
    * Payload: run_input? (optional Apify actor input, e.g. { locations: [...] })
    */
   NYNJ_SCRAPER_RUN: 'https://hook.us2.make.com/631cxvq2r9cl2xgpnuxwr9mngjy7w1ro',
+
+  /**
+   * InRange Predictive Scoring — S3 Trigger (scenario 4744381)
+   * Fetches unscored InRange property leads from public.inrange_leads
+   * (ordered by sale_date DESC NULLS LAST), scores each with Claude AI
+   * (flip potential, rental yield, quality tier A–D), writes results back
+   * to Postgres, and POSTs A/B-tier leads to Retool CRM for agent follow-up.
+   * C/D-tier leads are silently suppressed via a router fallback (builtin:Ignore).
+   * Payload: offset? (integer, default 0 — for paginated batch triggers)
+   */
+  INRANGE_S3_TRIGGER: 'https://hook.us2.make.com/68cv8nn6m0y9ids01h59tmkjq7gpgq6v',
 } as const;
 
 export type MakeWebhookKey = keyof typeof MAKE_WEBHOOKS;

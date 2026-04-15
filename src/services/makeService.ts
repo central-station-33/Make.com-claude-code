@@ -120,6 +120,12 @@ export interface ScraperRunPayload {
   run_input?: Record<string, unknown>;
 }
 
+/** Payload for triggering the InRange S3 predictive scoring batch */
+export interface InRangeS3Payload {
+  /** Row offset for paginated batch processing (default 0). */
+  offset?: number;
+}
+
 /** Immediate 202 response from the scraper trigger webhook */
 export interface ScraperRunResult extends MakeWebhookResponse {
   status?: 'accepted';
@@ -243,4 +249,17 @@ export function triggerNYNJScraper(payload: ScraperRunPayload = {}) {
  */
 export function triggerFollowUpNurture(payload: FollowUpNurturePayload) {
   return postWebhook<FollowUpResult>(MAKE_WEBHOOKS.FOLLOW_UP_NURTURE, payload);
+}
+
+/**
+ * Trigger the InRange S3 predictive scoring batch.
+ *
+ * Fetches up to the scenario's configured limit of unscored InRange
+ * property leads (ordered by sale_date DESC NULLS LAST), scores each
+ * with Claude AI, and writes quality_tier + scores back to Postgres.
+ * A/B-tier leads are forwarded to Retool CRM for agent follow-up.
+ * Pass offset for paginated batch processing.
+ */
+export function triggerInRangeS3(payload: InRangeS3Payload = {}) {
+  return postWebhook<MakeWebhookResponse>(MAKE_WEBHOOKS.INRANGE_S3_TRIGGER, payload);
 }
