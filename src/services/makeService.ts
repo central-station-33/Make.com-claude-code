@@ -113,6 +113,22 @@ export interface RecruitScoringResult extends MakeWebhookResponse {
   pipeline_stage?: string;
 }
 
+/** Payload for triggering the NY/NJ Combo Scraper run */
+export interface ScraperRunPayload {
+  /** Optional Apify actor input (e.g. { locations: ['New York, NY'] }).
+   *  Omit to use the actor's saved default input. */
+  run_input?: Record<string, unknown>;
+}
+
+/** Immediate 202 response from the scraper trigger webhook */
+export interface ScraperRunResult extends MakeWebhookResponse {
+  status?: 'accepted';
+  /** Apify run ID — use to monitor progress in the Apify console */
+  run_id?: string;
+  /** Default dataset ID populated by the run */
+  dataset_id?: string;
+}
+
 /** Follow-up sequence response fields */
 export interface FollowUpResult extends MakeWebhookResponse {
   lead_id?: string;
@@ -204,6 +220,17 @@ export function refreshRecruitScore(agentId: string) {
   return postWebhook<RecruitScoringResult>(MAKE_WEBHOOKS.RECRUIT_SCORE_REFRESH, {
     agent_id: agentId,
   });
+}
+
+/**
+ * Trigger the NY/NJ Combo Scraper run.
+ *
+ * The scenario responds 202 immediately with a run_id; the Apify actor
+ * scrape, UPSERT, and AI scoring continue asynchronously in Make.com.
+ * Pass run_input to override the actor's default search parameters.
+ */
+export function triggerNYNJScraper(payload: ScraperRunPayload = {}) {
+  return postWebhook<ScraperRunResult>(MAKE_WEBHOOKS.NYNJ_SCRAPER_RUN, payload);
 }
 
 /**

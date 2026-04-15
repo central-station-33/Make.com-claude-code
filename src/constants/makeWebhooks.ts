@@ -77,6 +77,18 @@ export const MAKE_WEBHOOKS = {
    *          follow_up_number (integer)
    */
   FOLLOW_UP_NURTURE: 'https://hook.us2.make.com/xsx1q4fkv6brvgl86all13cova5o4xgw',
+
+  /**
+   * NY/NJ Combo Scraper — Intake + Score Write-back (scenario 4546375)
+   * Fires an Apify actor run (actor LycjLhaWopr0uYVOx), polls until
+   * SUCCEEDED via builtin:BasicRepeater (30 iterations), upserts agent
+   * records into public.agents ON CONFLICT (full_name), then scores any
+   * unscored agents with Claude AI and writes quality_tier + lead_score
+   * back to Postgres. Apollo contact sync runs per-record (errors ignored).
+   * Returns 202 immediately with run_id; enrichment continues async.
+   * Payload: run_input? (optional Apify actor input, e.g. { locations: [...] })
+   */
+  NYNJ_SCRAPER_RUN: 'https://hook.us2.make.com/631cxvq2r9cl2xgpnuxwr9mngjy7w1ro',
 } as const;
 
 export type MakeWebhookKey = keyof typeof MAKE_WEBHOOKS;
