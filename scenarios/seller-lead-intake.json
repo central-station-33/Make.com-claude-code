@@ -1,0 +1,173 @@
+{
+  "name": "Seller Lead Intake — WordPress Gateway",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 1,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": -304, "y": 0 },
+        "restore": {
+          "parameters": {
+            "hook": { "label": "Seller Lead Webhook" }
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "anthropic:createAMessage",
+      "version": 1,
+      "parameters": {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 512
+      },
+      "mapper": {
+        "system": "You are a real estate lead qualification assistant.\nAnalyze the seller lead details and return ONLY a valid JSON object (no markdown, no code fences) with exactly these fields:\n{\n  \"lead_score\": \"hot\" | \"warm\" | \"cold\",\n  \"summary\": \"<one sentence summary of the seller and property>\",\n  \"follow_up_priority\": \"urgent\" | \"normal\" | \"low\",\n  \"estimated_price\": <number or null>,\n  \"notes\": \"<key observations for the agent>\"\n}\n\nScoring guide:\n- hot: motivated seller (divorce, relocation, financial distress), ASAP timeline, price near market value\n- warm: flexible timeline, reasonable price expectations\n- cold: testing the market, unrealistic price expectations, no urgency",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Qualify this seller lead:\nName: {{1.first_name}} {{1.last_name}}\nEmail: {{1.email}}\nPhone: {{1.phone}}\nProperty Address: {{1.property_address}}\nProperty Type: {{1.property_type}}\nAsking Price: {{1.asking_price}}\nTimeline to Sell: {{1.timeline}}\nMotivation: {{1.motivation}}\nProperty Condition: {{1.condition}}"
+          }
+        ]
+      },
+      "metadata": {
+        "designer": { "x": -16, "y": 0 },
+        "restore": {}
+      }
+    },
+    {
+      "id": 3,
+      "module": "json:ParseJSON",
+      "version": 1,
+      "parameters": {
+        "type": "{\"lead_score\":\"\",\"summary\":\"\",\"follow_up_priority\":\"\",\"estimated_price\":0,\"notes\":\"\"}"
+      },
+      "mapper": {
+        "string": "{{2.content[1].text}}"
+      },
+      "metadata": {
+        "designer": { "x": 272, "y": 0 },
+        "restore": {
+          "parameters": {
+            "type": { "label": "Custom" }
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "postgresql:insertRow",
+      "version": 1,
+      "parameters": {
+        "connection": 1,
+        "schema": "public",
+        "table": "leads",
+        "returnData": true
+      },
+      "mapper": {
+        "name": "{{1.first_name}} {{1.last_name}}",
+        "email": "{{1.email}}",
+        "phone": "{{1.phone}}",
+        "type": "SELLER",
+        "status": "New",
+        "source": "{{ifempty(1.source; \"WordPress Seller Form\")}}",
+        "property_type": "{{1.property_type}}",
+        "budget": "{{toNumber(replace(replace(1.asking_price; \"$\"; \"\"); \",\"; \"\"))}}",
+        "location": "{{1.property_address}}",
+        "notes": "{{3.summary}}\n{{3.notes}}\nTimeline: {{1.timeline}}\nMotivation: {{1.motivation}}\nCondition: {{1.condition}}",
+        "distribution_status": "{{if(3.follow_up_priority = \"urgent\"; \"priority\"; \"pending\")}}",
+        "source_details": "{\"lead_score\": \"{{3.lead_score}}\", \"follow_up_priority\": \"{{3.follow_up_priority}}\", \"estimated_price\": {{ifempty(3.estimated_price; \"null\")}}, \"timeline\": \"{{1.timeline}}\", \"motivation\": \"{{1.motivation}}\", \"condition\": \"{{1.condition}}\", \"qualified_by\": \"claude-haiku-4-5-20251001\"}"
+      },
+      "metadata": {
+        "designer": { "x": 560, "y": 0 },
+        "restore": {
+          "parameters": {
+            "connection": { "label": "Supabase PostgreSQL" }
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://YOUR_PROJECT_REF.supabase.co/functions/v1/process-seller-lead",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "timeout": "30",
+        "followRedirect": true,
+        "gzip": true,
+        "rejectUnauthorized": true,
+        "contentType": "application/json",
+        "data": "{\"lead_id\": \"{{4.id}}\", \"lead_score\": \"{{3.lead_score}}\", \"follow_up_priority\": \"{{3.follow_up_priority}}\", \"summary\": \"{{3.summary}}\"}"
+      },
+      "metadata": {
+        "designer": { "x": 848, "y": 0 },
+        "restore": {}
+      }
+    },
+    {
+      "id": 6,
+      "module": "gateway:WebHookResponse",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "status": "200",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": "{\"success\": true, \"lead_id\": \"{{4.id}}\", \"lead_score\": \"{{3.lead_score}}\", \"follow_up_priority\": \"{{3.follow_up_priority}}\", \"summary\": \"{{3.summary}}\"}"
+      },
+      "metadata": {
+        "designer": { "x": 1136, "y": 0 },
+        "restore": {}
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us2.make.com"
+  }
+}

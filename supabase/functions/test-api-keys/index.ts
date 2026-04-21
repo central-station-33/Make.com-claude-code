@@ -17,7 +17,7 @@ const handler = async (req: Request): Promise<Response> => {
   const results = {
     resend: { status: "untested", error: null },
     rapidapi: { status: "untested", error: null },
-    openai: { status: "untested", error: null },
+    anthropic: { status: "untested", error: null },
   };
 
   // Test Resend API
@@ -59,24 +59,25 @@ const handler = async (req: Request): Promise<Response> => {
     results.rapidapi.error = error.message;
   }
 
-  // Test OpenAI API
+  // Test Anthropic API
   try {
-    console.log("Testing OpenAI API...");
-    const openaiResponse = await fetch("https://api.openai.com/v1/models", {
+    console.log("Testing Anthropic API...");
+    const anthropicResponse = await fetch("https://api.anthropic.com/v1/models", {
       headers: {
-        "Authorization": `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
+        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+        "anthropic-version": "2023-06-01",
       },
     });
-    if (openaiResponse.ok) {
-      results.openai.status = "working";
-      console.log("OpenAI API test successful");
+    if (anthropicResponse.ok) {
+      results.anthropic.status = "working";
+      console.log("Anthropic API test successful");
     } else {
-      throw new Error(`HTTP error! status: ${openaiResponse.status}`);
+      throw new Error(`HTTP error! status: ${anthropicResponse.status}`);
     }
   } catch (error) {
-    console.error("OpenAI API test failed:", error);
-    results.openai.status = "failed";
-    results.openai.error = error.message;
+    console.error("Anthropic API test failed:", error);
+    results.anthropic.status = "failed";
+    results.anthropic.error = error.message;
   }
 
   return new Response(JSON.stringify(results), {

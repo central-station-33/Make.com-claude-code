@@ -1,0 +1,173 @@
+{
+  "name": "Seller Chain Intake — WordPress Gateway",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 1,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": -304, "y": 0 },
+        "restore": {
+          "parameters": {
+            "hook": { "label": "Seller Chain Webhook" }
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "anthropic:createAMessage",
+      "version": 1,
+      "parameters": {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 512
+      },
+      "mapper": {
+        "system": "You are a real estate chain risk analyst.\nAssess the seller's position in a property chain and return ONLY a valid JSON object (no markdown) with exactly these fields:\n{\n  \"chain_risk\": \"low\" | \"medium\" | \"high\",\n  \"summary\": \"<one sentence describing the seller's chain situation>\",\n  \"follow_up_priority\": \"urgent\" | \"normal\" | \"low\",\n  \"weak_links\": \"<comma-separated list of risk factors, or 'none'>\",\n  \"recommended_action\": \"<specific next step for the agent>\"\n}\n\nRisk guide:\n- low: mortgage approved, solicitor instructed, short or no chain, clear timeline\n- medium: mortgage in progress, chain length 2-3, some unknowns\n- high: no mortgage yet, long chain (4+), missing solicitor, vague timeline",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Assess this seller's chain:\nName: {{1.first_name}} {{1.last_name}}\nSelling: {{1.sale_address}} ({{1.sale_property_type}}) at {{1.sale_asking_price}}\nBuying: {{1.purchase_address}} at {{1.purchase_price}}\nChain position: {{1.chain_position}}\nChain length: {{1.chain_length}}\nMortgage status: {{1.mortgage_status}}\nSolicitor: {{1.solicitor_name}}\nTarget completion: {{1.target_completion}}\nNotes: {{1.notes}}"
+          }
+        ]
+      },
+      "metadata": {
+        "designer": { "x": -16, "y": 0 },
+        "restore": {}
+      }
+    },
+    {
+      "id": 3,
+      "module": "json:ParseJSON",
+      "version": 1,
+      "parameters": {
+        "type": "{\"chain_risk\":\"\",\"summary\":\"\",\"follow_up_priority\":\"\",\"weak_links\":\"\",\"recommended_action\":\"\"}"
+      },
+      "mapper": {
+        "string": "{{2.content[1].text}}"
+      },
+      "metadata": {
+        "designer": { "x": 272, "y": 0 },
+        "restore": {
+          "parameters": {
+            "type": { "label": "Custom" }
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "postgresql:insertRow",
+      "version": 1,
+      "parameters": {
+        "connection": 1,
+        "schema": "public",
+        "table": "leads",
+        "returnData": true
+      },
+      "mapper": {
+        "name": "{{1.first_name}} {{1.last_name}}",
+        "email": "{{1.email}}",
+        "phone": "{{1.phone}}",
+        "type": "SELLER",
+        "status": "New",
+        "source": "{{ifempty(1.source; \"WordPress Chain Form\")}}",
+        "property_type": "{{1.sale_property_type}}",
+        "budget": "{{toNumber(replace(replace(1.sale_asking_price; \"$\"; \"\"); \",\"; \"\"))}}",
+        "location": "{{1.sale_address}}",
+        "notes": "{{3.summary}}\nChain risk: {{3.chain_risk}}\nWeak links: {{3.weak_links}}\nRecommended action: {{3.recommended_action}}",
+        "distribution_status": "{{if(3.follow_up_priority = \"urgent\"; \"priority\"; \"pending\")}}",
+        "source_details": "{\"scenario_type\": \"chain\", \"chain_risk\": \"{{3.chain_risk}}\", \"follow_up_priority\": \"{{3.follow_up_priority}}\", \"weak_links\": \"{{3.weak_links}}\", \"recommended_action\": \"{{3.recommended_action}}\", \"chain_position\": \"{{1.chain_position}}\", \"chain_length\": \"{{1.chain_length}}\", \"mortgage_status\": \"{{1.mortgage_status}}\", \"solicitor_name\": \"{{1.solicitor_name}}\", \"target_completion\": \"{{1.target_completion}}\", \"purchase_address\": \"{{1.purchase_address}}\", \"purchase_price\": \"{{1.purchase_price}}\", \"qualified_by\": \"claude-haiku-4-5-20251001\"}"
+      },
+      "metadata": {
+        "designer": { "x": 560, "y": 0 },
+        "restore": {
+          "parameters": {
+            "connection": { "label": "Supabase PostgreSQL" }
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://YOUR_PROJECT_REF.supabase.co/functions/v1/process-chain-lead",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "timeout": "30",
+        "followRedirect": true,
+        "gzip": true,
+        "rejectUnauthorized": true,
+        "contentType": "application/json",
+        "data": "{\"lead_id\": \"{{4.id}}\", \"chain_risk\": \"{{3.chain_risk}}\", \"follow_up_priority\": \"{{3.follow_up_priority}}\", \"summary\": \"{{3.summary}}\", \"recommended_action\": \"{{3.recommended_action}}\"}"
+      },
+      "metadata": {
+        "designer": { "x": 848, "y": 0 },
+        "restore": {}
+      }
+    },
+    {
+      "id": 6,
+      "module": "gateway:WebHookResponse",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "status": "200",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": "{\"success\": true, \"lead_id\": \"{{4.id}}\", \"chain_risk\": \"{{3.chain_risk}}\", \"follow_up_priority\": \"{{3.follow_up_priority}}\", \"summary\": \"{{3.summary}}\", \"recommended_action\": \"{{3.recommended_action}}\"}"
+      },
+      "metadata": {
+        "designer": { "x": 1136, "y": 0 },
+        "restore": {}
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us2.make.com"
+  }
+}
