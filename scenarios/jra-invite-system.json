@@ -1,0 +1,377 @@
+{
+  "name": "JRA Invite System",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 1,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "hook": {
+              "data": {
+                "editable": true
+              },
+              "label": "JRA Invite Webhook"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "parameters": {},
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 3,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": true
+              },
+              "mapper": {
+                "url": "https://{{1.body.retoolOrg}}/api/v1/user_invites",
+                "method": "POST",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.body.retoolApiKey}}"
+                  },
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "contentType": "application/json",
+                "data": "{\n  \"email\": \"{{1.body.email}}\",\n  \"firstName\": \"{{1.body.firstName}}\",\n  \"lastName\": \"{{1.body.lastName}}\",\n  \"userType\": \"{{1.body.userType}}\"\n}",
+                "rejectUnauthorized": true,
+                "followRedirect": true,
+                "gzip": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": -120
+                }
+              }
+            },
+            {
+              "id": 4,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false
+              },
+              "mapper": {
+                "url": "https://{{1.body.retoolOrg}}/api/v1/groups/{{1.body.groupId}}/user_invites",
+                "method": "POST",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.body.retoolApiKey}}"
+                  },
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "contentType": "application/json",
+                "data": "{\n  \"inviteId\": \"{{3.data.id}}\"\n}",
+                "rejectUnauthorized": true,
+                "gzip": true
+              },
+              "filter": {
+                "name": "Only if groupId is set",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.body.groupId}}",
+                      "b": "",
+                      "o": "text:notequal"
+                    }
+                  ]
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": -120
+                }
+              }
+            },
+            {
+              "id": 5,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "status": "200",
+                "body": "{\n  \"success\": true,\n  \"action\": \"invite_sent\",\n  \"email\": \"{{1.body.email}}\",\n  \"inviteId\": \"{{3.data.id}}\",\n  \"message\": \"Invite successfully created in Retool\"\n}",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": -120
+                }
+              }
+            }
+          ],
+          "filter": {
+            "name": "action = send_invite",
+            "conditions": [
+              [
+                {
+                  "a": "{{1.body.action}}",
+                  "b": "send_invite",
+                  "o": "text:equal"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "flow": [
+            {
+              "id": 6,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false
+              },
+              "mapper": {
+                "url": "https://{{1.body.retoolOrg}}/api/v1/user_invites/{{1.body.inviteId}}",
+                "method": "DELETE",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.body.retoolApiKey}}"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "empty",
+                "parseResponse": true,
+                "rejectUnauthorized": true,
+                "gzip": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 80
+                }
+              }
+            },
+            {
+              "id": 7,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "status": "200",
+                "body": "{\n  \"success\": true,\n  \"action\": \"invite_revoked\",\n  \"inviteId\": \"{{1.body.inviteId}}\"\n}",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 80
+                }
+              }
+            }
+          ],
+          "filter": {
+            "name": "action = revoke_invite",
+            "conditions": [
+              [
+                {
+                  "a": "{{1.body.action}}",
+                  "b": "revoke_invite",
+                  "o": "text:equal"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "flow": [
+            {
+              "id": 8,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false
+              },
+              "mapper": {
+                "url": "https://{{1.body.retoolOrg}}/api/v1/user_invites",
+                "method": "POST",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.body.retoolApiKey}}"
+                  },
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "contentType": "application/json",
+                "data": "{\n  \"email\": \"{{1.body.email}}\"\n}",
+                "rejectUnauthorized": true,
+                "gzip": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 280
+                }
+              }
+            },
+            {
+              "id": 9,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "status": "200",
+                "body": "{\n  \"success\": true,\n  \"action\": \"invite_resent\",\n  \"email\": \"{{1.body.email}}\",\n  \"newInviteId\": \"{{8.data.id}}\"\n}",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 280
+                }
+              }
+            }
+          ],
+          "filter": {
+            "name": "action = resend_invite",
+            "conditions": [
+              [
+                {
+                  "a": "{{1.body.action}}",
+                  "b": "resend_invite",
+                  "o": "text:equal"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "flow": [
+            {
+              "id": 10,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "status": "200",
+                "body": "{\n  \"success\": true,\n  \"action\": \"test_ok\",\n  \"message\": \"JRA Invite System webhook is connected!\",\n  \"timestamp\": \"{{now}}\"\n}",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 480
+                }
+              }
+            }
+          ],
+          "filter": {
+            "name": "action = test",
+            "conditions": [
+              [
+                {
+                  "a": "{{1.body.action}}",
+                  "b": "test",
+                  "o": "text:equal"
+                }
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us1.make.com"
+  }
+}
