@@ -56,6 +56,37 @@
         {
           "flow": [
             {
+              "id": 13,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false
+              },
+              "mapper": {
+                "url": "YOUR_V2_UPSERT_INVITATION_WEBHOOK_URL",
+                "method": "POST",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "contentType": "application/json",
+                "data": "{\n  \"email\": \"{{1.body.email}}\",\n  \"first_name\": \"{{1.body.firstName}}\",\n  \"last_name\": \"{{1.body.lastName}}\",\n  \"role\": \"{{1.body.role}}\",\n  \"user_type\": \"{{1.body.userType}}\",\n  \"status\": \"received\",\n  \"invited_by\": \"make.com\",\n  \"external_ref\": \"{{1.body.externalRef}}\",\n  \"message\": \"invite requested\"\n}",
+                "rejectUnauthorized": true,
+                "gzip": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": -120
+                }
+              }
+            },
+            {
               "id": 3,
               "module": "http:ActionSendData",
               "version": 3,
@@ -86,7 +117,38 @@
               },
               "metadata": {
                 "designer": {
-                  "x": 600,
+                  "x": 900,
+                  "y": -120
+                }
+              }
+            },
+            {
+              "id": 14,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false
+              },
+              "mapper": {
+                "url": "YOUR_V2_MARK_INVITED_WEBHOOK_URL",
+                "method": "POST",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "contentType": "application/json",
+                "data": "{\n  \"email\": \"{{1.body.email}}\",\n  \"status\": \"invited\",\n  \"retool_invite_id\": \"{{3.data.id}}\",\n  \"message\": \"workspace invite created\"\n}",
+                "rejectUnauthorized": true,
+                "gzip": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
                   "y": -120
                 }
               }
@@ -133,7 +195,7 @@
               },
               "metadata": {
                 "designer": {
-                  "x": 900,
+                  "x": 1500,
                   "y": -120
                 }
               }
@@ -155,7 +217,7 @@
               },
               "metadata": {
                 "designer": {
-                  "x": 1200,
+                  "x": 1800,
                   "y": -120
                 }
               }

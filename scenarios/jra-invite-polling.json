@@ -82,7 +82,7 @@
         "handleErrors": false
       },
       "mapper": {
-        "url": "YOUR_CALLBACK_WEBHOOK_URL",
+        "url": "YOUR_V2_MARK_ACCEPTED_WEBHOOK_URL",
         "method": "POST",
         "headers": [
           {
@@ -94,7 +94,7 @@
         "bodyType": "raw",
         "parseResponse": true,
         "contentType": "application/json",
-        "data": "{\n  \"event\": \"invite_accepted\",\n  \"email\": \"{{3.email}}\",\n  \"inviteId\": \"{{3.id}}\",\n  \"firstName\": \"{{3.firstName}}\",\n  \"lastName\": \"{{3.lastName}}\",\n  \"detectedAt\": \"{{now}}\"\n}",
+        "data": "{\n  \"email\": \"{{3.email}}\",\n  \"responded_at\": \"{{formatDate(now; \\\"YYYY-MM-DD\\\")}}\"\n}",
         "rejectUnauthorized": true,
         "gzip": true
       },
