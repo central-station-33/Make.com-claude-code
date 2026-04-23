@@ -351,6 +351,73 @@
               ]
             ]
           }
+        },
+        {
+          "flow": [
+            {
+              "id": 11,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false
+              },
+              "mapper": {
+                "url": "https://{{1.body.retoolOrg}}/api/v1/users",
+                "method": "GET",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.body.retoolApiKey}}"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "empty",
+                "parseResponse": true,
+                "rejectUnauthorized": true,
+                "gzip": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 680
+                }
+              }
+            },
+            {
+              "id": 12,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "status": "200",
+                "body": "{\n  \"success\": true,\n  \"action\": \"invite_accepted\",\n  \"email\": \"{{1.body.email}}\",\n  \"inviteId\": \"{{1.body.inviteId}}\",\n  \"isActiveUser\": {{if(contains(map(11.data; \"email\"); 1.body.email); \"true\"; \"false\")}}\n}",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 680
+                }
+              }
+            }
+          ],
+          "filter": {
+            "name": "action = invite_accepted",
+            "conditions": [
+              [
+                {
+                  "a": "{{1.body.action}}",
+                  "b": "invite_accepted",
+                  "o": "text:equal"
+                }
+              ]
+            ]
+          }
         }
       ]
     }

@@ -1,0 +1,144 @@
+{
+  "name": "JRA Invite Polling",
+  "flow": [
+    {
+      "id": 1,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false
+      },
+      "mapper": {
+        "url": "https://YOUR_RETOOL_ORG/api/v1/user_invites",
+        "method": "GET",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer YOUR_RETOOL_API_KEY"
+          }
+        ],
+        "qs": [],
+        "bodyType": "empty",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "gzip": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false
+      },
+      "mapper": {
+        "url": "https://YOUR_RETOOL_ORG/api/v1/users",
+        "method": "GET",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer YOUR_RETOOL_API_KEY"
+          }
+        ],
+        "qs": [],
+        "bodyType": "empty",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "gzip": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicIterator",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "array": "{{1.data}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false
+      },
+      "mapper": {
+        "url": "YOUR_CALLBACK_WEBHOOK_URL",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "contentType": "application/json",
+        "data": "{\n  \"event\": \"invite_accepted\",\n  \"email\": \"{{3.email}}\",\n  \"inviteId\": \"{{3.id}}\",\n  \"firstName\": \"{{3.firstName}}\",\n  \"lastName\": \"{{3.lastName}}\",\n  \"detectedAt\": \"{{now}}\"\n}",
+        "rejectUnauthorized": true,
+        "gzip": true
+      },
+      "filter": {
+        "name": "Invite email now exists as active user",
+        "conditions": [
+          [
+            {
+              "a": "{{contains(map(2.data; \"email\"); 3.email)}}",
+              "b": "true",
+              "o": "text:equal"
+            }
+          ]
+        ]
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false,
+      "scheduling": {
+        "type": "indefinitely",
+        "interval": 3600
+      }
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us1.make.com"
+  }
+}
