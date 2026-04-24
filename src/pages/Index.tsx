@@ -45,7 +45,7 @@ const IndexPage = () => {
       <Card className="w-full max-w-[400px] p-8 animate-in fade-in-50">
         <div className="flex flex-col items-center space-y-6 mb-6">
           <img 
-            src="/lovable-uploads/9426cd2c-3e5d-46c0-8df6-12e24c277730.png" 
+            src="/uploads/9426cd2c-3e5d-46c0-8df6-12e24c277730.png" 
             alt="Logo" 
             className="h-32 w-auto"
           />
