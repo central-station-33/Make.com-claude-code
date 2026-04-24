@@ -1,4 +1,4 @@
--- IMPRINT Automation: content queue and settings tables
+-- F50SEO Automation: content queue and settings tables
 
 create table if not exists public.content_queue (
   id              uuid primary key default gen_random_uuid(),

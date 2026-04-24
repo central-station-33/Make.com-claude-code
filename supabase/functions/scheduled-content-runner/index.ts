@@ -1,5 +1,5 @@
 /**
- * IMPRINT Daily Content Runner
+ * F50SEO Daily Content Runner
  * Triggered by Supabase cron (configure in Dashboard → Edge Functions → Cron).
  * Recommended schedule: "0 8 * * *" (8 AM daily)
  *

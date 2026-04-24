@@ -4,24 +4,24 @@ import { Progress } from "@/components/ui/progress";
 import { TrendingUp, TrendingDown, Bot, Globe, Star, Zap } from "lucide-react";
 
 const engines = [
-  { name: "ChatGPT", score: 72, mentions: 34, trend: +8, color: "bg-green-500" },
-  { name: "Claude", score: 85, mentions: 51, trend: +14, color: "bg-violet-500" },
-  { name: "Perplexity", score: 61, mentions: 22, trend: +3, color: "bg-blue-500" },
-  { name: "Gemini", score: 48, mentions: 15, trend: -2, color: "bg-yellow-500" },
+  { name: "ChatGPT", score: 68, mentions: 29, trend: +11, color: "bg-green-500" },
+  { name: "Claude", score: 82, mentions: 47, trend: +16, color: "bg-violet-500" },
+  { name: "Perplexity", score: 57, mentions: 19, trend: +5, color: "bg-blue-500" },
+  { name: "Gemini", score: 44, mentions: 12, trend: -1, color: "bg-yellow-500" },
 ];
 
 const statCards = [
-  { label: "AI Search Score", value: "71", unit: "/100", icon: Star, delta: "+6 this month", up: true },
-  { label: "Total Mentions", value: "122", unit: "", icon: Bot, delta: "+23 this month", up: true },
-  { label: "Inbound Leads", value: "8", unit: "", icon: Zap, delta: "+3 this month", up: true },
-  { label: "Pages Indexed", value: "14", unit: "", icon: Globe, delta: "+2 this month", up: true },
+  { label: "AI Search Score", value: "68", unit: "/100", icon: Star, delta: "+11 this month", up: true },
+  { label: "Total Mentions", value: "107", unit: "", icon: Bot, delta: "+32 this month", up: true },
+  { label: "Inbound Leads", value: "6", unit: "", icon: Zap, delta: "+2 this month", up: true },
+  { label: "Pages Indexed", value: "0", unit: "", icon: Globe, delta: "Launch F50SEO to grow", up: true },
 ];
 
 const recentLeads = [
-  { source: "ChatGPT", query: "best real estate advisor in [city]", time: "2h ago", status: "New" },
-  { source: "Perplexity", query: "top property investment consultants", time: "5h ago", status: "Contacted" },
-  { source: "Claude", query: "real estate agent reviews near me", time: "1d ago", status: "Qualified" },
-  { source: "Gemini", query: "home buying advice professionals", time: "2d ago", status: "New" },
+  { source: "ChatGPT", query: "best real estate agent in Jersey City NJ", time: "1h ago", status: "New" },
+  { source: "Perplexity", query: "relocating from NYC to New Jersey 2026", time: "4h ago", status: "Contacted" },
+  { source: "Claude", query: "how to sell my house fast in NJ", time: "1d ago", status: "Qualified" },
+  { source: "Gemini", query: "first time homebuyer programs New Jersey", time: "2d ago", status: "New" },
 ];
 
 export default function VisibilityDashboard() {
