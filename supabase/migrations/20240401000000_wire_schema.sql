@@ -154,6 +154,18 @@ create table if not exists public.wire_campaigns (
   created_at       timestamptz not null default now()
 );
 
+-- ── wire_api_keys ───────────────────────────────────────────
+-- Stores API keys used by Retool (and other consumers) to authenticate
+-- against the wire-api edge function.
+create table if not exists public.wire_api_keys (
+  id         uuid primary key default uuid_generate_v4(),
+  name       text not null,
+  key        text not null unique,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists wire_api_keys_key_idx on public.wire_api_keys (key);
+
 -- ── Row Level Security ──────────────────────────────────────
 -- All Wire tables are accessible to authenticated users.
 -- The wire-api edge function uses the service_role key and bypasses RLS.
@@ -167,6 +179,7 @@ alter table public.wire_opportunities enable row level security;
 alter table public.wire_appointments enable row level security;
 alter table public.wire_automations enable row level security;
 alter table public.wire_campaigns enable row level security;
+alter table public.wire_api_keys enable row level security;
 
 -- Authenticated users can read and write all Wire data
 create policy "wire_authenticated_all" on public.wire_contacts
@@ -194,6 +207,9 @@ create policy "wire_authenticated_all" on public.wire_automations
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 create policy "wire_authenticated_all" on public.wire_campaigns
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+create policy "wire_authenticated_all" on public.wire_api_keys
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- ── Seed default pipeline ───────────────────────────────────

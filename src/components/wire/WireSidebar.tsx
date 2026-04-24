@@ -10,6 +10,7 @@ import {
   Megaphone,
   BarChart3,
   Wifi,
+  Plug,
 } from 'lucide-react';
 
 interface NavItem {
@@ -27,6 +28,7 @@ const navItems: NavItem[] = [
   { id: 'automations', label: 'Automations', icon: Zap },
   { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
   { id: 'reporting', label: 'Reporting', icon: BarChart3 },
+  { id: 'integrations', label: 'Integrations', icon: Plug },
 ];
 
 interface WireSidebarProps {

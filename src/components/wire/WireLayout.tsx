@@ -8,6 +8,7 @@ import { WireCalendar } from './WireCalendar';
 import { WireAutomations } from './WireAutomations';
 import { WireCampaigns } from './WireCampaigns';
 import { WireReporting } from './WireReporting';
+import { WireIntegrations } from './WireIntegrations';
 import type { WireView } from '@/types/wire.types';
 
 function ViewContent({ view }: { view: WireView }) {
@@ -28,6 +29,8 @@ function ViewContent({ view }: { view: WireView }) {
       return <WireCampaigns />;
     case 'reporting':
       return <WireReporting />;
+    case 'integrations':
+      return <WireIntegrations />;
     default:
       return <WireDashboard />;
   }

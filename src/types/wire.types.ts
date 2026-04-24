@@ -154,4 +154,5 @@ export type WireView =
   | 'calendar'
   | 'automations'
   | 'campaigns'
-  | 'reporting';
+  | 'reporting'
+  | 'integrations';
