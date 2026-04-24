@@ -1,9 +1,9 @@
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { sendPasswordReset } from '@/integrations/firebase/authHelpers';
 
 interface ForgotPasswordHandlerProps {
   setIsLoading: (value: boolean) => void;
-  setError: (error: any) => void;
+  setError: (error: unknown) => void;
   setSuccess: (value: boolean) => void;
 }
 
@@ -18,26 +18,18 @@ export const useForgotPasswordHandler = ({
     setIsLoading(true);
     setError(null);
     setSuccess(false);
-
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
-
-      if (error) throw error;
-
+      const redirectUrl = `${window.location.origin}/auth/reset-password`;
+      await sendPasswordReset(email, redirectUrl);
       setSuccess(true);
       toast({
-        title: "Reset link sent",
-        description: "Please check your email for the password reset link.",
+        title: 'Reset link sent',
+        description: 'Please check your email for the password reset link.',
       });
-    } catch (error: any) {
-      setError(error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message,
-      });
+    } catch (err: unknown) {
+      setError(err);
+      const msg = err instanceof Error ? err.message : 'Failed to send reset email';
+      toast({ variant: 'destructive', title: 'Error', description: msg });
     } finally {
       setIsLoading(false);
     }

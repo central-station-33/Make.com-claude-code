@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 import { useToast } from "@/hooks/use-toast";
 import { Message, TypingStatus } from "@/types/messaging.types";
 import { RealtimeChannel } from "@supabase/supabase-js";
@@ -13,7 +13,7 @@ export const useLeadMessaging = (leadId: string) => {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = getCurrentUser();
       setCurrentUser(user);
     };
     getUser();
@@ -22,7 +22,7 @@ export const useLeadMessaging = (leadId: string) => {
   const { data: messages, refetch, isLoading, error } = useQuery({
     queryKey: ["leadMessages", leadId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = getCurrentUser();
       if (!user) throw new Error("Not authenticated");
 
       const { data, error } = await supabase

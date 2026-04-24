@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 
 interface Props {
   children: ReactNode;
@@ -49,10 +49,10 @@ class ErrorBoundary extends Component<Props, State> {
 
   private async logUnauthorizedAccess(error: Error) {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = getCurrentUser();
       if (user) {
         await supabase.from('unauthorized_access_attempts').insert({
-          user_id: user.id,
+          user_id: user.uid,
           lead_id: this.extractLeadId(), // You would need to implement this based on your URL structure
           ip_address: window.location.hostname,
           user_agent: navigator.userAgent

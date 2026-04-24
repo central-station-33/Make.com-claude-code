@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { getCurrentUser, sendMagicLink, signOut as firebaseSignOut } from '@/integrations/firebase/authHelpers';
 import { useToast } from '@/hooks/use-toast';
 import { SMSMessage } from '@/types/messaging.types';
 
@@ -45,7 +45,7 @@ export const useSMSMessaging = (leadId: string) => {
         .from('text_messages')
         .insert({
           lead_id: leadId,
-          sender_id: (await supabase.auth.getUser()).data.user?.id,
+          sender_id: getCurrentUser()?.uid,
           message,
           status: 'pending',
           metadata: { recipient_phone: phoneNumber }

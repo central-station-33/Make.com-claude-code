@@ -8,7 +8,7 @@ import { EmailField } from "./form-fields/EmailField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
+import { signInWithGitHub } from "@/integrations/firebase/authHelpers";
 
 const SignInForm = memo(() => {
   const {
@@ -28,12 +28,7 @@ const SignInForm = memo(() => {
   const handleGitHubSignIn = useCallback(async () => {
     setGithubLoading(true);
     try {
-      await supabase.auth.signInWithOAuth({
-        provider: 'github',
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`,
-        },
-      });
+      await signInWithGitHub();
     } finally {
       setGithubLoading(false);
     }

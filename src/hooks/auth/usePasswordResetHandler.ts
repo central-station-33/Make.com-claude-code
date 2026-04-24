@@ -1,10 +1,9 @@
-
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { sendPasswordReset, confirmNewPassword } from '@/integrations/firebase/authHelpers';
 
 export const usePasswordResetHandler = (
   setIsLoading: (value: boolean) => void,
-  setError: (error: any) => void,
+  setError: (error: unknown) => void,
   setSuccess: (value: boolean) => void
 ) => {
   const { toast } = useToast();
@@ -13,57 +12,32 @@ export const usePasswordResetHandler = (
     setIsLoading(true);
     setError(null);
     setSuccess(false);
-
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
-
-      if (error) throw error;
-
+      await sendPasswordReset(email, `${window.location.origin}/auth/reset-password`);
       setSuccess(true);
-      toast({
-        title: "Reset link sent",
-        description: "Please check your email for the password reset link.",
-      });
-    } catch (err: any) {
-      console.error("Password reset error:", err);
+      toast({ title: 'Reset link sent', description: 'Please check your email.' });
+    } catch (err: unknown) {
       setError(err);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: err.message,
-      });
+      const msg = err instanceof Error ? err.message : 'Failed to send reset email';
+      toast({ variant: 'destructive', title: 'Error', description: msg });
     } finally {
       setIsLoading(false);
     }
   };
 
+  // token here is the Firebase oobCode from the reset URL
   const handleResetPassword = async (token: string, password: string) => {
     setIsLoading(true);
     setError(null);
     setSuccess(false);
-
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password,
-      });
-
-      if (error) throw error;
-
+      await confirmNewPassword(token, password);
       setSuccess(true);
-      toast({
-        title: "Password set successfully",
-        description: "You can now sign in with your new password.",
-      });
-    } catch (err: any) {
-      console.error("Password reset error:", err);
+      toast({ title: 'Password set', description: 'You can now sign in.' });
+    } catch (err: unknown) {
       setError(err);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: err.message,
-      });
+      const msg = err instanceof Error ? err.message : 'Password reset failed';
+      toast({ variant: 'destructive', title: 'Error', description: msg });
     } finally {
       setIsLoading(false);
     }

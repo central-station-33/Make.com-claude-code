@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 
 export const useTimelineData = (leadId: string) => {
   return useQuery({
     queryKey: ['followUps', leadId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = getCurrentUser();
       if (!user) {
         throw new Error("Not authenticated");
       }
@@ -15,7 +15,7 @@ export const useTimelineData = (leadId: string) => {
         .from('leads')
         .select('id')
         .eq('id', leadId)
-        .eq('user_id', user.id)
+        .eq('user_id', user.uid)
         .maybeSingle();
 
       if (userLeadError) {
@@ -29,7 +29,7 @@ export const useTimelineData = (leadId: string) => {
           .from('leads')
           .select('id')
           .eq('id', leadId)
-          .eq('agent_id', user.id)
+          .eq('agent_id', user.uid)
           .maybeSingle();
 
         if (agentLeadError) {

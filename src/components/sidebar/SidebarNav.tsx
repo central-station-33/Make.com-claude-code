@@ -1,20 +1,10 @@
 
-import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, PauseCircle, Wifi } from "lucide-react";
+import { Settings, MessageSquare, LayoutDashboard, ChartBar, PauseCircle, Wifi } from "lucide-react";
 import SidebarNavItem from "./SidebarNavItem";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const SidebarNav = () => {
-  const [user, setUser] = useState<any>(null);
-
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      console.log("Current user:", user);
-    };
-    getUser();
-  }, []);
+  const { user } = useAuth();
 
   const mainNavItems = [
     {

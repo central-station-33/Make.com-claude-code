@@ -1,9 +1,9 @@
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { confirmNewPassword } from '@/integrations/firebase/authHelpers';
 
 interface ResetPasswordHandlerProps {
   setIsLoading: (value: boolean) => void;
-  setError: (error: any) => void;
+  setError: (error: unknown) => void;
   setSuccess: (value: boolean) => void;
   onSuccess?: () => void;
 }
@@ -16,28 +16,19 @@ export const useResetPasswordHandler = ({
 }: ResetPasswordHandlerProps) => {
   const { toast } = useToast();
 
+  // token = Firebase oobCode extracted from the reset URL query param
   const handleResetPassword = async (token: string, password: string) => {
     setIsLoading(true);
     setError(null);
     setSuccess(false);
-
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password,
-      });
-
-      if (error) throw error;
-
+      await confirmNewPassword(token, password);
       setSuccess(true);
       onSuccess?.();
-    } catch (error: any) {
-      console.error("Password reset error:", error);
-      setError(error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message,
-      });
+    } catch (err: unknown) {
+      setError(err);
+      const msg = err instanceof Error ? err.message : 'Password reset failed';
+      toast({ variant: 'destructive', title: 'Error', description: msg });
     } finally {
       setIsLoading(false);
     }

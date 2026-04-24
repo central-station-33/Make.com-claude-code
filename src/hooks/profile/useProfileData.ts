@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Profile } from '@/types/database/auth/profiles.types';
-import { supabase } from '@/integrations/supabase/client';
+import { getCurrentUser, sendMagicLink, signOut as firebaseSignOut } from '@/integrations/firebase/authHelpers';
 import { useToast } from '@/hooks/use-toast';
 
 export const useProfileData = () => {
@@ -18,7 +18,7 @@ export const useProfileData = () => {
 
   const getProfile = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = getCurrentUser();
       
       if (!user) {
         navigate('/auth');
@@ -28,7 +28,7 @@ export const useProfileData = () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', user.uid)
         .single();
 
       if (error) throw error;
@@ -47,13 +47,13 @@ export const useProfileData = () => {
 
   const updateProfile = async (updates: Partial<Profile>) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = getCurrentUser();
       if (!user) throw new Error('No user logged in');
 
       const { error } = await supabase
         .from('profiles')
         .update(updates)
-        .eq('id', user.id);
+        .eq('id', user.uid);
 
       if (error) throw error;
 
@@ -75,7 +75,7 @@ export const useProfileData = () => {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await firebaseSignOut();
       navigate('/auth');
       toast({
         title: "Signed out successfully"

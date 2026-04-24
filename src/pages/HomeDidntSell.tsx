@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 
 const HomeDidntSell = () => {
   const [loading, setLoading] = useState(false);
@@ -11,7 +11,7 @@ const HomeDidntSell = () => {
   const handleConsultationRequest = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = getCurrentUser();
       
       if (!user) {
         toast({
@@ -28,7 +28,7 @@ const HomeDidntSell = () => {
         type: 'consultation',
         source: 'home_didnt_sell',
         status: 'New',
-        user_id: user.id,
+        user_id: user.uid,
         source_details: { page: 'home_didnt_sell' }
       });
 

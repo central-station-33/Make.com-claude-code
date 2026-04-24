@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 
 interface UseLeadImportReturn {
   isUploading: boolean;
@@ -19,7 +19,7 @@ export const useLeadImport = (onSuccess?: () => void): UseLeadImportReturn => {
       setIsUploading(true);
       setProgress(0);
 
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      const user = getCurrentUser(); const authError = null;
       
       if (authError || !user) {
         throw new Error('User not authenticated');
@@ -31,7 +31,7 @@ export const useLeadImport = (onSuccess?: () => void): UseLeadImportReturn => {
           filename: file.name,
           file_format: file.name.split('.').pop()?.toLowerCase() || 'unknown',
           status: 'pending',
-          created_by: user.id,
+          created_by: user.uid,
           source: 'manual_upload'
         })
         .select()

@@ -1,5 +1,4 @@
-
-import { Session, User } from '@supabase/supabase-js';
+import type { User } from 'firebase/auth';
 
 export interface AuthError {
   message: string;
@@ -18,18 +17,16 @@ export interface SignInResult {
 }
 
 export interface AuthContextType {
-  session: Session | null;
   user: User | null;
   userRole: string | null;
-  signIn: (email: string, password?: string) => Promise<{ data: any; error: null; } | { data: null; error: any; }>;
-  signUp: (email: string) => Promise<{ data: any; error: null; } | { data: null; error: any; }>;
+  signIn: (email: string, password?: string) => Promise<{ data: unknown; error: null } | { data: null; error: unknown }>;
+  signUp: (email: string) => Promise<{ data: unknown; error: null } | { data: null; error: unknown }>;
   signOut: () => Promise<void>;
   loading: boolean;
   error: Error | null;
 }
 
 export interface AuthFormContextType {
-  session: Session | null;
   user: User | null;
   userRole: string | null;
   email: string;

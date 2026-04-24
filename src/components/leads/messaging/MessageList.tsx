@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageGroup } from "./MessageGroup";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 import { Message, MessageListProps } from "@/types/messaging.types";
 
 export const MessageList = ({ messages = [], isLoading }: MessageListProps) => {
@@ -11,7 +11,7 @@ export const MessageList = ({ messages = [], isLoading }: MessageListProps) => {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = getCurrentUser();
       setCurrentUser(user);
     };
     getUser();

@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 import { useToast } from "@/hooks/use-toast";
 import { LeadType, LeadStatus } from "@/types/lead";
 
@@ -9,8 +9,8 @@ export const useLeadProcessing = () => {
   const { toast } = useToast();
 
   const processLeadData = async (data: any) => {
-    const userResponse = await supabase.auth.getUser();
-    const userId = userResponse.data.user?.id;
+    const userResponse = { data: { user: getCurrentUser() } };
+    const userId = userResponse.data.user?.uid;
 
     if (!userId) {
       throw new Error('User not authenticated');
