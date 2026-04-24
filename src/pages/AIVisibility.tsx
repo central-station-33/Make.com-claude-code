@@ -1,6 +1,6 @@
 import { AppSidebar } from "@/components/AppSidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LayoutDashboard, Search, Sparkles, FileText, Eye, Brain, Zap } from "lucide-react";
+import { LayoutDashboard, Search, Sparkles, FileText, Eye, Brain, Zap, CalendarClock, ListChecks, Settings2 } from "lucide-react";
 import VisibilityDashboard from "@/components/ai-visibility/VisibilityDashboard";
 import AISearchGrader from "@/components/ai-visibility/AISearchGrader";
 import ContentGenerator from "@/components/ai-visibility/ContentGenerator";
@@ -8,15 +8,21 @@ import LLMsTxtGenerator from "@/components/ai-visibility/LLMsTxtGenerator";
 import SearchMonitor from "@/components/ai-visibility/SearchMonitor";
 import IntentResearch from "@/components/ai-visibility/IntentResearch";
 import LeadCaptureAgent from "@/components/ai-visibility/LeadCaptureAgent";
+import AutomationDashboard from "@/components/ai-visibility/AutomationDashboard";
+import ContentQueue from "@/components/ai-visibility/ContentQueue";
+import AutomationSettings from "@/components/ai-visibility/AutomationSettings";
 
 const tabs = [
-  { value: "dashboard", label: "Overview", icon: LayoutDashboard },
-  { value: "monitor", label: "Search Monitor", icon: Eye },
-  { value: "intent", label: "Intent Research", icon: Brain },
-  { value: "content", label: "Content Agent", icon: Sparkles },
-  { value: "grader", label: "AI Grader", icon: Search },
-  { value: "leads", label: "Lead Capture", icon: Zap },
-  { value: "llmstxt", label: "LLMs.txt", icon: FileText },
+  { value: "dashboard",  label: "Overview",         icon: LayoutDashboard },
+  { value: "monitor",    label: "Search Monitor",    icon: Eye },
+  { value: "intent",     label: "Intent Research",   icon: Brain },
+  { value: "content",    label: "Content Agent",     icon: Sparkles },
+  { value: "grader",     label: "AI Grader",         icon: Search },
+  { value: "leads",      label: "Lead Capture",      icon: Zap },
+  { value: "llmstxt",    label: "LLMs.txt",          icon: FileText },
+  { value: "auto-dash",  label: "Automation",        icon: CalendarClock },
+  { value: "queue",      label: "Review Queue",      icon: ListChecks },
+  { value: "auto-cfg",   label: "Auto Settings",     icon: Settings2 },
 ];
 
 export default function AIVisibility() {
@@ -33,7 +39,7 @@ export default function AIVisibility() {
               <h1 className="text-3xl font-semibold tracking-tight">IMPRINT</h1>
             </div>
             <p className="text-muted-foreground">
-              AI-powered visibility suite — monitor your brand across AI search engines, research intent, generate AI-optimized content, and score inbound leads with autonomous Claude agents.
+              AI visibility, autonomous content generation, daily publishing to jetreadvisors.com and all social platforms — powered by Claude agents.
             </p>
           </div>
 
@@ -47,13 +53,16 @@ export default function AIVisibility() {
               ))}
             </TabsList>
 
-            <TabsContent value="dashboard"><VisibilityDashboard /></TabsContent>
-            <TabsContent value="monitor"><SearchMonitor /></TabsContent>
-            <TabsContent value="intent"><IntentResearch /></TabsContent>
-            <TabsContent value="content"><ContentGenerator /></TabsContent>
-            <TabsContent value="grader"><AISearchGrader /></TabsContent>
-            <TabsContent value="leads"><LeadCaptureAgent /></TabsContent>
-            <TabsContent value="llmstxt"><LLMsTxtGenerator /></TabsContent>
+            <TabsContent value="dashboard">  <VisibilityDashboard />    </TabsContent>
+            <TabsContent value="monitor">    <SearchMonitor />          </TabsContent>
+            <TabsContent value="intent">     <IntentResearch />         </TabsContent>
+            <TabsContent value="content">    <ContentGenerator />       </TabsContent>
+            <TabsContent value="grader">     <AISearchGrader />         </TabsContent>
+            <TabsContent value="leads">      <LeadCaptureAgent />       </TabsContent>
+            <TabsContent value="llmstxt">    <LLMsTxtGenerator />       </TabsContent>
+            <TabsContent value="auto-dash">  <AutomationDashboard />    </TabsContent>
+            <TabsContent value="queue">      <ContentQueue />           </TabsContent>
+            <TabsContent value="auto-cfg">   <AutomationSettings />     </TabsContent>
           </Tabs>
         </div>
       </main>
