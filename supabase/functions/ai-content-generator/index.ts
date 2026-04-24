@@ -5,110 +5,218 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface GenerateRequest {
-  type: "landing-page" | "blog-post" | "faq" | "guide" | "grade" | "llmstxt";
-  topic?: string;
-  brand?: string;
-  audience?: string;
-  content?: string;
-  url?: string;
-  pages?: { path: string; description: string }[];
-  options?: Record<string, boolean>;
+const CLAUDE_MODEL = "claude-sonnet-4-6";
+
+async function callClaude(apiKey: string, system: string, messages: {role: string, content: string}[]): Promise<string> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 4096, system, messages }),
+  });
+  if (!res.ok) throw new Error(`Claude API error: ${await res.text()}`);
+  const data = await res.json();
+  return data.content?.[0]?.text ?? "";
+}
+
+// Multi-step content generation agent
+async function runContentAgent(apiKey: string, type: string, topic: string, brand: string, audience: string) {
+  const steps: {step: string, output: string}[] = [];
+
+  // Step 1: Intent Research
+  const intent = await callClaude(apiKey,
+    "You are an AI search intent research specialist. Analyze search behavior across ChatGPT, Claude, Perplexity, and Gemini.",
+    [{role: "user", content:
+      `Research the search intent behind "${topic}" for "${audience}".
+
+Return a JSON object with:
+- primary_intent: string (what they really want)
+- pain_points: string[] (top 5 pain points)
+- common_queries: string[] (top 8 queries people actually ask AI engines)
+- content_angle: string (best angle to rank in AI search)
+- tone: string (recommended tone: professional/conversational/authoritative)
+
+JSON only, no markdown.`}]
+  );
+
+  let intentData: Record<string, unknown> = {};
+  try { intentData = JSON.parse(intent); } catch { intentData = { primary_intent: intent }; }
+  steps.push({ step: "Intent Research", output: intent });
+
+  // Step 2: Content Structure
+  const structure = await callClaude(apiKey,
+    "You are a content architecture specialist for AI search optimization. Design content outlines that maximize visibility in AI-generated answers.",
+    [{role: "user", content:
+      `Design the optimal structure for a ${type} about "${topic}" for ${brand}, targeting "${audience}".
+
+Context from intent research:
+${JSON.stringify(intentData, null, 2)}
+
+Return a JSON object with:
+- title: string
+- meta_description: string (160 chars max)
+- sections: [{heading: string, purpose: string, key_points: string[]}]
+- faq_questions: string[] (5 questions AI engines commonly surface)
+- word_count_target: number
+
+JSON only, no markdown.`}]
+  );
+
+  let structureData: Record<string, unknown> = {};
+  try { structureData = JSON.parse(structure); } catch { structureData = { title: structure }; }
+  steps.push({ step: "Content Structure", output: structure });
+
+  // Step 3: Write Content in Brand Voice
+  const content = await callClaude(apiKey,
+    `You are an expert content writer specializing in AI search optimization for ${brand}. Write authoritative, helpful content that AI engines love to cite. Use clear headings, answer questions directly, include specific details and credibility signals.`,
+    [{role: "user", content:
+      `Write a complete ${type} for ${brand} about "${topic}", targeting "${audience}".
+
+Use this structure:
+${JSON.stringify(structureData, null, 2)}
+
+Brand voice context:
+- Business: ${brand}
+- Target audience: ${audience}
+- Primary intent: ${intentData.primary_intent ?? topic}
+- Recommended tone: ${intentData.tone ?? "professional"}
+
+Requirements:
+- Write in markdown format
+- Include all sections from the structure
+- Answer the FAQ questions with direct, citable answers
+- Include trust signals (years of experience, client results, credentials)
+- End with a clear call to action
+- Target word count: ${structureData.word_count_target ?? 800}+ words
+
+Write the full content now:`}]
+  );
+
+  steps.push({ step: "Content Writing", output: content });
+
+  // Step 4: AI Optimization Pass
+  const optimized = await callClaude(apiKey,
+    "You are an AI search optimization expert. Refine content to maximize citations and visibility in ChatGPT, Claude, Perplexity, and Gemini results.",
+    [{role: "user", content:
+      `Optimize this content for AI search visibility. Keep the full content but improve:
+1. Add a concise summary paragraph at the top (AI engines often pull this)
+2. Ensure every key claim is specific and citable
+3. Add entity clarity (who/what/where/when for key points)
+4. Strengthen FAQ answers to be direct and quotable
+5. Verify headings are scannable questions or clear statements
+
+Original content:
+${content}
+
+Return the optimized full content in markdown:`}]
+  );
+
+  steps.push({ step: "AI Optimization", output: optimized });
+
+  return { steps, final: optimized, structure: structureData, intent: intentData };
+}
+
+// Real content grading via Claude
+async function runGraderAgent(apiKey: string, content: string, url: string) {
+  const result = await callClaude(apiKey,
+    "You are an AI search optimization auditor. Analyze content with expert precision and return structured JSON scores.",
+    [{role: "user", content:
+      `Analyze this content for AI search optimization. Grade it as if you are evaluating whether ChatGPT, Claude, Perplexity, or Gemini would cite it in responses.
+
+URL: ${url || "Not provided"}
+
+Content:
+${content}
+
+Return a JSON object (no markdown, JSON only):
+{
+  "overall": <number 0-100>,
+  "categories": [
+    {
+      "name": "Content Clarity",
+      "score": <0-100>,
+      "feedback": "<specific actionable feedback>",
+      "pass": <boolean>
+    },
+    {
+      "name": "Structured Headings",
+      "score": <0-100>,
+      "feedback": "<specific actionable feedback>",
+      "pass": <boolean>
+    },
+    {
+      "name": "Entity & Fact Density",
+      "score": <0-100>,
+      "feedback": "<specific actionable feedback>",
+      "pass": <boolean>
+    },
+    {
+      "name": "Question Coverage",
+      "score": <0-100>,
+      "feedback": "<specific actionable feedback>",
+      "pass": <boolean>
+    },
+    {
+      "name": "Credibility Signals",
+      "score": <0-100>,
+      "feedback": "<specific actionable feedback>",
+      "pass": <boolean>
+    },
+    {
+      "name": "Citation Readiness",
+      "score": <0-100>,
+      "feedback": "<specific actionable feedback>",
+      "pass": <boolean>
+    }
+  ],
+  "top_issues": ["<issue 1>", "<issue 2>", "<issue 3>"],
+  "strengths": ["<strength 1>", "<strength 2>"],
+  "ai_engines": {
+    "chatgpt": <0-100>,
+    "claude": <0-100>,
+    "perplexity": <0-100>,
+    "gemini": <0-100>
+  },
+  "quick_wins": ["<specific fix that would most improve score>", "<fix 2>", "<fix 3>"]
+}`}]
+  );
+
+  try {
+    return JSON.parse(result);
+  } catch {
+    return { overall: 50, categories: [], top_issues: [result], strengths: [], ai_engines: {}, quick_wins: [] };
+  }
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const body: GenerateRequest = await req.json();
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const body = await req.json();
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
 
-    if (!anthropicKey) {
-      return new Response(
-        JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    let systemPrompt = "";
-    let userPrompt = "";
+    let result: unknown;
 
-    switch (body.type) {
-      case "landing-page":
-        systemPrompt = "You are an expert copywriter specializing in AI-search-optimized landing pages. Write content that ranks well in ChatGPT, Claude, Perplexity, and Gemini results. Use clear headings, answer common questions, include trust signals, and write in a professional yet approachable tone.";
-        userPrompt = `Create a complete landing page for:\n- Business: ${body.brand}\n- Topic/Service: ${body.topic}\n- Target audience: ${body.audience}\n\nInclude: hero headline, value proposition, how it works (3 steps), benefits, FAQ section (5 questions), and a clear CTA. Format with markdown headings.`;
-        break;
-
-      case "blog-post":
-        systemPrompt = "You are an SEO and AI search expert creating blog content optimized for both traditional Google search and AI search engines. Write informative, authoritative content with clear structure.";
-        userPrompt = `Write a comprehensive blog post about "${body.topic}" for ${body.audience}, published by ${body.brand}.\n\nInclude: engaging intro, 5-7 main sections with H2 headings, practical advice, FAQ section, and conclusion with CTA. Aim for 800-1200 words.`;
-        break;
-
-      case "faq":
-        systemPrompt = "You are an expert at creating FAQ content optimized for AI search. Write clear, direct answers that AI engines can easily cite and surface to users.";
-        userPrompt = `Create a comprehensive FAQ page about "${body.topic}" for ${body.audience}, from ${body.brand}.\n\nGenerate 12-15 questions covering: basics, process, costs, results, and how to get started. Format as Q: / A: pairs.`;
-        break;
-
-      case "guide":
-        systemPrompt = "You are a professional content strategist. Create detailed, structured guides that help readers accomplish specific goals. Content should be comprehensive and actionable.";
-        userPrompt = `Create a step-by-step guide on "${body.topic}" for ${body.audience}, from ${body.brand}.\n\nInclude: introduction, 4-5 chapters with practical steps, common mistakes to avoid, resources section, and next steps. Use clear markdown formatting.`;
-        break;
-
-      case "grade":
-        systemPrompt = "You are an AI search optimization expert. Analyze content and provide a detailed score (0-100) for how well it will perform in AI search engines like ChatGPT, Claude, Perplexity, and Gemini.";
-        userPrompt = `Analyze this content for AI search optimization:\n\nURL: ${body.url || "Not provided"}\n\nContent:\n${body.content}\n\nProvide a JSON response with:\n- overall_score (0-100)\n- categories: [{name, score, feedback, pass}] for: Content Clarity, Structured Headings, Entity Mentions, Question Coverage, Credibility Signals, URL Structure\n- top_issues: [string]\n- strengths: [string]`;
-        break;
-
-      case "llmstxt":
-        systemPrompt = "You are an expert in AI crawler optimization. Generate well-structured llms.txt files that help AI systems accurately understand and represent websites.";
-        userPrompt = `Generate an llms.txt file for:\n- Site: ${body.brand}\n- URL: ${body.url}\n- Pages: ${JSON.stringify(body.pages)}\n\nFollow the llms.txt specification format with site description, page index with descriptions, AI instructions, and permissions block.`;
-        break;
-
-      default:
-        return new Response(
-          JSON.stringify({ error: "Invalid content type" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    if (body.type === "grade") {
+      result = await runGraderAgent(apiKey, body.content ?? "", body.url ?? "");
+    } else {
+      result = await runContentAgent(apiKey, body.type, body.topic, body.brand, body.audience);
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-    });
+    return new Response(JSON.stringify(result),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("Anthropic API error:", err);
-      return new Response(
-        JSON.stringify({ error: "AI generation failed", details: err }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const data = await response.json();
-    const text = data.content?.[0]?.text ?? "";
-
-    return new Response(
-      JSON.stringify({ result: text, type: body.type }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (err) {
-    console.error("Edge function error:", err);
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.error("Agent error:", err);
+    return new Response(JSON.stringify({ error: String(err) }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
