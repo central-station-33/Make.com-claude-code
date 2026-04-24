@@ -57,7 +57,7 @@ const SidebarNav = () => {
       id: "ai-visibility",
       path: "/ai-visibility",
       icon: Sparkles,
-      label: "AI Visibility Suite"
+      label: "F50SEO"
     }
   ];
 

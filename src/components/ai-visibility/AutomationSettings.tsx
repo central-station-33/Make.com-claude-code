@@ -27,10 +27,10 @@ type Settings = {
 };
 
 const defaultSettings: Settings = {
-  brand_name: "",
-  target_topic: "",
-  target_audience: "",
-  wordpress_url: "",
+  brand_name: "JET Realty Advisors",
+  target_topic: "NY/NJ Real Estate",
+  target_audience: "home buyers, sellers, investors, and agents in New York and New Jersey",
+  wordpress_url: "https://jetrealtyadvisors.com",
   wordpress_username: "",
   wordpress_app_password: "",
   make_webhook_url: "",
@@ -176,7 +176,7 @@ export default function AutomationSettings() {
       {/* WordPress */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2"><Globe className="h-4 w-4" /> WordPress — jetreadvisors.com</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Globe className="h-4 w-4" /> WordPress — jetrealtyadvisors.com</CardTitle>
           <CardDescription>
             Create an Application Password in WP Admin → Users → Profile → Application Passwords.
           </CardDescription>
@@ -184,7 +184,7 @@ export default function AutomationSettings() {
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <Label>WordPress URL</Label>
-            <Input placeholder="https://jetreadvisors.com" value={settings.wordpress_url} onChange={e => set("wordpress_url", e.target.value)} />
+            <Input placeholder="https://jetrealtyadvisors.com" value={settings.wordpress_url} onChange={e => set("wordpress_url", e.target.value)} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -218,7 +218,7 @@ export default function AutomationSettings() {
           <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900">
             <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
             <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-              <p>IMPRINT sends one webhook per post with: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">platform</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">body</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">title</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">brand</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">tags</code>.</p>
+              <p>F50SEO sends one webhook per post with: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">platform</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">body</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">title</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">brand</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">tags</code>.</p>
               <p>In Make.com, use a Router with filter <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">platform = linkedin</code> etc. to route to each platform's module.</p>
             </div>
           </div>
@@ -236,7 +236,7 @@ export default function AutomationSettings() {
 
           {/* Platform checklist */}
           <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase">Platforms IMPRINT generates content for</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase">Platforms F50SEO generates content for</p>
             <div className="grid grid-cols-2 gap-2">
               {["LinkedIn", "Twitter / X", "Facebook", "Instagram"].map(p => (
                 <div key={p} className="flex items-center gap-2 text-sm text-muted-foreground">
