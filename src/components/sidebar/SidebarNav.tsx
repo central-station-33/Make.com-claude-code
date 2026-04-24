@@ -1,5 +1,5 @@
 
-import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, PauseCircle } from "lucide-react";
+import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, PauseCircle, Wifi } from "lucide-react";
 import SidebarNavItem from "./SidebarNavItem";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +22,12 @@ const SidebarNav = () => {
       path: "/dashboard",
       icon: LayoutDashboard,
       label: "Dashboard"
+    },
+    {
+      id: "the-wire",
+      path: "/the-wire",
+      icon: Wifi,
+      label: "The Wire"
     }
   ];
 
