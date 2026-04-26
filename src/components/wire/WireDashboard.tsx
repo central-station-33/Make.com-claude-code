@@ -6,11 +6,11 @@ import {
   KanbanSquare,
   CalendarDays,
   Zap,
-  TrendingUp,
   ArrowUp,
   DollarSign,
 } from 'lucide-react';
 import { mockStats, mockAppointments, mockConversations, mockOpportunities } from './wireData';
+import { useWireContacts } from '@/hooks/useWireContacts';
 
 function StatCard({
   title,
@@ -49,10 +49,12 @@ function StatCard({
 }
 
 export function WireDashboard() {
+  const { contacts } = useWireContacts();
   const todayAppts = mockAppointments.filter(
     (a) => a.status === 'confirmed' || a.status === 'scheduled'
   );
   const unread = mockConversations.filter((c) => c.unread_count > 0);
+  const liveContactCount = contacts.length;
 
   return (
     <div className="p-6 space-y-6">
@@ -67,8 +69,8 @@ export function WireDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Contacts"
-          value={mockStats.total_contacts.toLocaleString()}
-          sub={`+${mockStats.new_contacts_today} today`}
+          value={liveContactCount.toLocaleString()}
+          sub={liveContactCount > 0 ? 'live from database' : 'Add your first contact'}
           icon={Users}
           accent="bg-blue-100"
         />
