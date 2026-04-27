@@ -11,8 +11,12 @@ import {
   serverTimestamp,
   type DocumentData,
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '@/integrations/firebase/config';
+import app from '@/integrations/firebase/config';
 import type { WireConversation, WireMessage, WireChannel } from '@/types/wire.types';
+
+const fns = getFunctions(app);
 
 function docToConversation(id: string, data: DocumentData): WireConversation {
   return {
@@ -109,22 +113,31 @@ export function useWireInbox() {
 
     setSending(true);
     try {
-      // Add the message
-      await addDoc(collection(db, 'wire_messages'), {
-        conversation_id: selectedId,
-        direction: 'outbound',
-        channel: conv.channel,
-        body: body.trim(),
-        status: 'sent',
-        created_at: serverTimestamp(),
-      });
-      // Update conversation last message
-      await updateDoc(doc(db, 'wire_conversations', selectedId), {
-        last_message: body.trim(),
-        last_message_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
-        status: 'open',
-      });
+      if (conv.channel === 'sms') {
+        // Route through Cloud Function → Twilio for real delivery
+        const callSendSms = httpsCallable(fns, 'sendSms');
+        await callSendSms({ conversationId: selectedId, body: body.trim() });
+      } else if (conv.channel === 'email') {
+        // Route through Cloud Function → SendGrid for real delivery
+        const callSendEmail = httpsCallable(fns, 'sendEmail');
+        await callSendEmail({ conversationId: selectedId, body: body.trim() });
+      } else {
+        // Note / other channel — write directly to Firestore
+        await addDoc(collection(db, 'wire_messages'), {
+          conversation_id: selectedId,
+          direction: 'outbound',
+          channel: conv.channel,
+          body: body.trim(),
+          status: 'sent',
+          created_at: serverTimestamp(),
+        });
+        await updateDoc(doc(db, 'wire_conversations', selectedId), {
+          last_message: body.trim(),
+          last_message_at: serverTimestamp(),
+          updated_at: serverTimestamp(),
+          status: 'open',
+        });
+      }
     } finally {
       setSending(false);
     }
