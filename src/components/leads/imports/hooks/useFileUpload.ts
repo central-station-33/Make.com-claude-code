@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 import { useToast } from "@/hooks/use-toast";
 
 interface UploadResult {
@@ -39,7 +39,7 @@ export const useFileUpload = (onSuccess: () => void) => {
       }, 120000);
       setUploadTimeout(timeout);
 
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      const user = getCurrentUser(); const authError = null;
       
       if (authError) {
         console.error('Auth error:', authError);
@@ -50,7 +50,7 @@ export const useFileUpload = (onSuccess: () => void) => {
         throw new Error('User not authenticated');
       }
 
-      console.log('Starting upload with authenticated user:', user.id);
+      console.log('Starting upload with authenticated user:', user.uid);
 
       // Create import record first
       const { data: importRecord, error: importError } = await supabase
@@ -60,7 +60,7 @@ export const useFileUpload = (onSuccess: () => void) => {
           file_format: file.name.split('.').pop() || 'unknown',
           status: 'pending',
           source: 'manual_upload',
-          created_by: user.id
+          created_by: user.uid
         })
         .select()
         .single();

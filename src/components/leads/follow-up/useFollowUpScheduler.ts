@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 import { scheduleFollowUp } from "./services/followUpService";
@@ -15,7 +15,7 @@ export const useFollowUpScheduler = (leadId: string) => {
       setError(null);
 
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = getCurrentUser();
         if (!user) {
           throw new Error("Not authenticated");
         }
@@ -24,7 +24,7 @@ export const useFollowUpScheduler = (leadId: string) => {
           leadId,
           templateId: params.templateId,
           date: params.date,
-          userId: user.id
+          userId: user.uid
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : "An unexpected error occurred";

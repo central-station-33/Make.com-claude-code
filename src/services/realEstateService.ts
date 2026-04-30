@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 
 interface PropertyListing {
   property_id: string;
@@ -41,7 +41,7 @@ export interface Property {
 
 export const fetchPropertyListings = async (city: string = "New York", state: string = "NY"): Promise<Property[]> => {
   try {
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const session = { user: getCurrentUser() }; const authError = null;
     
     if (authError || !session) {
       console.error('Authentication error:', authError);

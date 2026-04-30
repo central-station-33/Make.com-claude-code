@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { getCurrentUser, signOut as firebaseSignOut, confirmNewPassword } from '@/integrations/firebase/authHelpers';
 
 const Settings = () => {
   const { toast } = useToast();
@@ -36,11 +36,8 @@ const Settings = () => {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (error) throw error;
+      if (!getCurrentUser()) throw new Error('Not authenticated');
+      await confirmNewPassword('', newPassword);
 
       toast({
         title: "Password updated successfully",
@@ -64,7 +61,7 @@ const Settings = () => {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await firebaseSignOut();
       toast({
         title: "Signed out successfully"
       });

@@ -5,7 +5,7 @@ import { LeadType } from "@/components/crm/types/lead";
 import LeadFormHeader from "./forms/LeadFormHeader";
 import LeadFormFields from "./forms/LeadFormFields";
 import LeadSourceFields from "./LeadSourceFields";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 
 interface CreateLeadFormProps {
   onSuccess?: () => void;
@@ -51,7 +51,7 @@ const CreateLeadForm = ({ onSuccess }: CreateLeadFormProps) => {
           phone: data.phone || null,
           type: data.type || LeadType.BUYER,
           status: 'New',
-          user_id: (await supabase.auth.getUser()).data.user?.id,
+          user_id: getCurrentUser()?.uid,
           distribution_status: 'pending',
           // Only include source fields if they have values
           ...(source && { source }),

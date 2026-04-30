@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 import { useToast } from "@/hooks/use-toast";
 import { Lead } from "@/types/lead";
 
@@ -43,7 +43,7 @@ export const useEmailLead = (lead: Lead) => {
         .from("lead_email_communications")
         .insert({
           lead_id: lead.id,
-          sender_id: (await supabase.auth.getUser()).data.user?.id,
+          sender_id: getCurrentUser()?.uid,
           material_id: selectedMaterial,
           subject,
           content,

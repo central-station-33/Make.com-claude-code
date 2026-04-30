@@ -1,5 +1,5 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser, signOut as firebaseSignOut } from "@/integrations/firebase/authHelpers";
 import { ImportRecord } from "@/types/import.types";
 
 const generateUniqueId = () => {
@@ -9,8 +9,8 @@ const generateUniqueId = () => {
 
 export const useImportRecord = () => {
   const createImportRecord = async (file: File): Promise<ImportRecord> => {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+    const userData = { user: getCurrentUser() };
+    const userId = userData.user?.uid;
     
     if (!userId) {
       throw new Error('User not authenticated');

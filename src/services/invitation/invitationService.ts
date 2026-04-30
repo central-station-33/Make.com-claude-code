@@ -1,5 +1,5 @@
 
-import { supabase } from '@/integrations/supabase/client';
+import { getCurrentUser, sendMagicLink, signOut as firebaseSignOut } from '@/integrations/firebase/authHelpers';
 import { Invitation, DatabaseInvitationStatus } from '@/types/invitation.types';
 import { cleanupService } from './cleanupService';
 import { emailService } from './emailService';
@@ -38,7 +38,7 @@ export const invitationService = {
     try {
       const siteURL = window.location.origin;
       
-      const { data, error } = await supabase.auth.signInWithOtp({
+      const { data, error } = await sendMagicLink({
         email,
         options: {
           emailRedirectTo: `${siteURL}/auth/callback?invite=true`,
@@ -69,7 +69,7 @@ export const invitationService = {
     try {
       const siteURL = window.location.origin;
       
-      const { data, error } = await supabase.auth.signInWithOtp({
+      const { data, error } = await sendMagicLink({
         email,
         options: {
           emailRedirectTo: `${siteURL}/auth/callback?invite=true`,

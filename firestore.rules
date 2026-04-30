@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Authenticated users can read/write all Wire and app data.
+    // Tighten these rules per-collection once you add roles.
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ── User profiles & roles ─────────────────────────────────
+    match /profiles/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /user_roles/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ── The Wire collections ──────────────────────────────────
+    match /wire_contacts/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /wire_conversations/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /wire_messages/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /wire_pipelines/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /wire_pipeline_stages/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /wire_opportunities/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /wire_appointments/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /wire_automations/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /wire_campaigns/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /wire_api_keys/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ── Legacy CRM collections ────────────────────────────────
+    match /leads/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /messages/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /import_records/{docId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}
