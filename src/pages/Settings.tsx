@@ -4,9 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { getCurrentUser, signOut as firebaseSignOut } from '@/integrations/firebase/authHelpers';
-import { updatePassword } from 'firebase/auth';
-import { auth } from '@/integrations/firebase/config';
+import { getCurrentUser, signOut as firebaseSignOut, confirmNewPassword } from '@/integrations/firebase/authHelpers';
 
 const Settings = () => {
   const { toast } = useToast();
@@ -38,9 +36,8 @@ const Settings = () => {
 
     setIsLoading(true);
     try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error('Not authenticated');
-      await updatePassword(currentUser, newPassword);
+      if (!getCurrentUser()) throw new Error('Not authenticated');
+      await confirmNewPassword('', newPassword);
 
       toast({
         title: "Password updated successfully",

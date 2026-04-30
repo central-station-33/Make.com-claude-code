@@ -1,4 +1,4 @@
-import type { User } from 'firebase/auth';
+import type { CompatUser as User } from '@/integrations/firebase/authHelpers';
 
 export interface AuthError {
   message: string;

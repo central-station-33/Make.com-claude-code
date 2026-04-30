@@ -1,17 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  collection,
-  doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  serverTimestamp,
-  type DocumentData,
-} from 'firebase/firestore';
-import { db } from '@/integrations/firebase/config';
+import { supabase } from '@/integrations/supabase/client';
 import type { WireAppointment } from '@/types/wire.types';
 
 export type AppointmentFormData = {
@@ -26,63 +14,49 @@ export type AppointmentFormData = {
   meeting_link?: string;
 };
 
-function docToAppointment(id: string, data: DocumentData): WireAppointment {
-  return {
-    id,
-    contact_id: data.contact_id ?? '',
-    title: data.title ?? '',
-    description: data.description ?? undefined,
-    start_time: data.start_time?.toDate?.()?.toISOString() ?? data.start_time ?? new Date().toISOString(),
-    end_time: data.end_time?.toDate?.()?.toISOString() ?? data.end_time ?? new Date().toISOString(),
-    status: data.status ?? 'scheduled',
-    assigned_to: data.assigned_to ?? undefined,
-    location: data.location ?? undefined,
-    meeting_link: data.meeting_link ?? undefined,
-    created_at: data.created_at?.toDate?.()?.toISOString() ?? new Date().toISOString(),
-  };
-}
-
 export function useWireCalendar() {
   const [appointments, setAppointments] = useState<WireAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const q = query(collection(db, 'wire_appointments'), orderBy('start_time', 'asc'));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setAppointments(snap.docs.map((d) => docToAppointment(d.id, d.data())));
-        setLoading(false);
-      },
-      (err) => { setError(err.message); setLoading(false); }
-    );
-    return unsub;
+  const fetchAppointments = useCallback(async () => {
+    const { data, error: err } = await supabase
+      .from('wire_appointments')
+      .select('*')
+      .order('start_time', { ascending: true });
+    if (err) { setError(err.message); } else { setAppointments((data ?? []) as WireAppointment[]); }
+    setLoading(false);
   }, []);
 
+  useEffect(() => {
+    fetchAppointments();
+    const channel = supabase
+      .channel('wire_appointments_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wire_appointments' }, () => {
+        fetchAppointments();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchAppointments]);
+
   const addAppointment = useCallback(async (data: AppointmentFormData): Promise<void> => {
-    await addDoc(collection(db, 'wire_appointments'), {
-      ...data,
-      start_time: new Date(data.start_time),
-      end_time: new Date(data.end_time),
-      created_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
-    });
+    const { error: err } = await supabase.from('wire_appointments').insert(data);
+    if (err) throw new Error(err.message);
   }, []);
 
   const updateAppointment = useCallback(async (id: string, data: Partial<AppointmentFormData>): Promise<void> => {
-    const payload: Record<string, unknown> = { ...data, updated_at: serverTimestamp() };
-    if (data.start_time) payload.start_time = new Date(data.start_time);
-    if (data.end_time) payload.end_time = new Date(data.end_time);
-    await updateDoc(doc(db, 'wire_appointments', id), payload);
+    const { error: err } = await supabase.from('wire_appointments').update(data).eq('id', id);
+    if (err) throw new Error(err.message);
   }, []);
 
   const updateStatus = useCallback(async (id: string, status: WireAppointment['status']): Promise<void> => {
-    await updateDoc(doc(db, 'wire_appointments', id), { status, updated_at: serverTimestamp() });
+    const { error: err } = await supabase.from('wire_appointments').update({ status }).eq('id', id);
+    if (err) throw new Error(err.message);
   }, []);
 
   const deleteAppointment = useCallback(async (id: string): Promise<void> => {
-    await deleteDoc(doc(db, 'wire_appointments', id));
+    const { error: err } = await supabase.from('wire_appointments').delete().eq('id', id);
+    if (err) throw new Error(err.message);
   }, []);
 
   return { appointments, loading, error, addAppointment, updateAppointment, updateStatus, deleteAppointment };

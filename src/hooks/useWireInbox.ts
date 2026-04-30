@@ -1,52 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  collection,
-  doc,
-  addDoc,
-  updateDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  where,
-  serverTimestamp,
-  type DocumentData,
-} from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db } from '@/integrations/firebase/config';
-import app from '@/integrations/firebase/config';
+import { supabase } from '@/integrations/supabase/client';
 import type { WireConversation, WireMessage, WireChannel } from '@/types/wire.types';
-
-const fns = getFunctions(app);
-
-function docToConversation(id: string, data: DocumentData): WireConversation {
-  return {
-    id,
-    contact_id: data.contact_id ?? '',
-    channel: data.channel ?? 'sms',
-    status: data.status ?? 'open',
-    subject: data.subject ?? undefined,
-    last_message: data.last_message ?? undefined,
-    last_message_at: data.last_message_at?.toDate?.()?.toISOString() ?? undefined,
-    assigned_to: data.assigned_to ?? undefined,
-    unread_count: data.unread_count ?? 0,
-    created_at: data.created_at?.toDate?.()?.toISOString() ?? new Date().toISOString(),
-    updated_at: data.updated_at?.toDate?.()?.toISOString() ?? new Date().toISOString(),
-  };
-}
-
-function docToMessage(id: string, data: DocumentData): WireMessage {
-  return {
-    id,
-    conversation_id: data.conversation_id ?? '',
-    direction: data.direction ?? 'outbound',
-    channel: data.channel ?? 'sms',
-    body: data.body ?? '',
-    from: data.from ?? undefined,
-    to: data.to ?? undefined,
-    status: data.status ?? 'sent',
-    created_at: data.created_at?.toDate?.()?.toISOString() ?? new Date().toISOString(),
-  };
-}
 
 export type NewConversationData = {
   contact_id: string;
@@ -61,48 +15,76 @@ export function useWireInbox() {
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
-  const msgUnsubRef = useRef<(() => void) | null>(null);
+  const msgChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Subscribe to all conversations ordered by last activity
-  useEffect(() => {
-    const q = query(
-      collection(db, 'wire_conversations'),
-      orderBy('last_message_at', 'desc')
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setConversations(snap.docs.map((d) => docToConversation(d.id, d.data())));
-      setLoadingConvs(false);
-    }, () => setLoadingConvs(false));
-    return unsub;
+  const fetchConversations = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('wire_conversations')
+      .select('*')
+      .order('last_message_at', { ascending: false });
+    if (!error) setConversations((data ?? []) as WireConversation[]);
+    setLoadingConvs(false);
   }, []);
 
-  // Subscribe to messages for selected conversation
   useEffect(() => {
-    if (msgUnsubRef.current) { msgUnsubRef.current(); msgUnsubRef.current = null; }
+    fetchConversations();
+    const channel = supabase
+      .channel('wire_conversations_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wire_conversations' }, () => {
+        fetchConversations();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchConversations]);
+
+  const fetchMessages = useCallback(async (convId: string) => {
+    const { data, error } = await supabase
+      .from('wire_messages')
+      .select('*')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true });
+    if (!error) setMessages((data ?? []) as WireMessage[]);
+    setLoadingMsgs(false);
+  }, []);
+
+  useEffect(() => {
+    if (msgChannelRef.current) {
+      supabase.removeChannel(msgChannelRef.current);
+      msgChannelRef.current = null;
+    }
     if (!selectedId) { setMessages([]); return; }
 
     setLoadingMsgs(true);
-    const q = query(
-      collection(db, 'wire_messages'),
-      where('conversation_id', '==', selectedId),
-      orderBy('created_at', 'asc')
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map((d) => docToMessage(d.id, d.data())));
-      setLoadingMsgs(false);
-    }, () => setLoadingMsgs(false));
-    msgUnsubRef.current = unsub;
-    return () => { if (msgUnsubRef.current) msgUnsubRef.current(); };
-  }, [selectedId]);
+    fetchMessages(selectedId);
+
+    const ch = supabase
+      .channel(`wire_messages_${selectedId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'wire_messages',
+        filter: `conversation_id=eq.${selectedId}`,
+      }, () => {
+        fetchMessages(selectedId);
+      })
+      .subscribe();
+    msgChannelRef.current = ch;
+
+    return () => {
+      if (msgChannelRef.current) {
+        supabase.removeChannel(msgChannelRef.current);
+        msgChannelRef.current = null;
+      }
+    };
+  }, [selectedId, fetchMessages]);
 
   const selectConversation = useCallback(async (conv: WireConversation) => {
     setSelectedId(conv.id);
-    // Mark as read
     if (conv.unread_count > 0) {
-      await updateDoc(doc(db, 'wire_conversations', conv.id), {
-        unread_count: 0,
-        status: conv.status === 'unread' ? 'open' : conv.status,
-      });
+      await supabase
+        .from('wire_conversations')
+        .update({ unread_count: 0, status: conv.status === 'unread' ? 'open' : conv.status })
+        .eq('id', conv.id);
     }
   }, []);
 
@@ -113,56 +95,71 @@ export function useWireInbox() {
 
     setSending(true);
     try {
-      if (conv.channel === 'sms') {
-        // Route through Cloud Function → Twilio for real delivery
-        const callSendSms = httpsCallable(fns, 'sendSms');
-        await callSendSms({ conversationId: selectedId, body: body.trim() });
-      } else if (conv.channel === 'email') {
-        // Route through Cloud Function → SendGrid for real delivery
-        const callSendEmail = httpsCallable(fns, 'sendEmail');
-        await callSendEmail({ conversationId: selectedId, body: body.trim() });
-      } else {
-        // Note / other channel — write directly to Firestore
-        await addDoc(collection(db, 'wire_messages'), {
+      const now = new Date().toISOString();
+
+      const { data: msgRow, error: msgErr } = await supabase
+        .from('wire_messages')
+        .insert({
           conversation_id: selectedId,
           direction: 'outbound',
           channel: conv.channel,
           body: body.trim(),
-          status: 'sent',
-          created_at: serverTimestamp(),
-        });
-        await updateDoc(doc(db, 'wire_conversations', selectedId), {
-          last_message: body.trim(),
-          last_message_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-          status: 'open',
-        });
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (msgErr) throw new Error(msgErr.message);
+
+      await supabase
+        .from('wire_conversations')
+        .update({ last_message: body.trim(), last_message_at: now, updated_at: now, status: 'open' })
+        .eq('id', selectedId);
+
+      if (conv.channel === 'sms') {
+        const { data: contact } = await supabase
+          .from('wire_contacts')
+          .select('phone')
+          .eq('id', conv.contact_id)
+          .single();
+
+        if (contact?.phone) {
+          await supabase.functions.invoke('send-sms', {
+            body: { id: msgRow.id, message: body.trim(), recipient_phone: contact.phone },
+          });
+        }
       }
+
+      await supabase.from('wire_messages').update({ status: 'sent' }).eq('id', msgRow.id);
     } finally {
       setSending(false);
     }
   }, [selectedId, conversations]);
 
   const startConversation = useCallback(async (data: NewConversationData): Promise<string> => {
-    const ref = await addDoc(collection(db, 'wire_conversations'), {
-      contact_id: data.contact_id,
-      channel: data.channel,
-      subject: data.subject ?? null,
-      status: 'open',
-      unread_count: 0,
-      last_message_at: serverTimestamp(),
-      created_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
-    });
-    setSelectedId(ref.id);
-    return ref.id;
+    const now = new Date().toISOString();
+    const { data: row, error: err } = await supabase
+      .from('wire_conversations')
+      .insert({
+        contact_id: data.contact_id,
+        channel: data.channel,
+        subject: data.subject ?? null,
+        status: 'open',
+        unread_count: 0,
+        last_message_at: now,
+      })
+      .select()
+      .single();
+    if (err) throw new Error(err.message);
+    setSelectedId(row.id);
+    return row.id;
   }, []);
 
   const closeConversation = useCallback(async (id: string) => {
-    await updateDoc(doc(db, 'wire_conversations', id), {
-      status: 'closed',
-      updated_at: serverTimestamp(),
-    });
+    await supabase
+      .from('wire_conversations')
+      .update({ status: 'closed', updated_at: new Date().toISOString() })
+      .eq('id', id);
   }, []);
 
   const selectedConversation = conversations.find((c) => c.id === selectedId) ?? null;

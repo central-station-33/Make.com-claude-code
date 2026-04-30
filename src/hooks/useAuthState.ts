@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { User } from 'firebase/auth';
+import type { CompatUser as User } from '@/integrations/firebase/authHelpers';
 import { onAuthChange } from '@/integrations/firebase/authHelpers';
 import { getDocuments, COLLECTIONS, where } from '@/integrations/firebase/firestore';
 

@@ -1,63 +1,78 @@
-import {
-  signInWithEmailLink,
-  sendSignInLinkToEmail,
-  signInWithPopup,
-  GithubAuthProvider,
-  signOut as firebaseSignOut,
-  sendPasswordResetEmail,
-  confirmPasswordReset,
-  isSignInWithEmailLink,
-  onAuthStateChanged,
-  type User,
-} from 'firebase/auth';
-import { auth } from './config';
+// Supabase-backed compatibility shim — keeps the same API surface as the old Firebase helpers
+import { supabase } from '@/integrations/supabase/client';
+import type { User } from '@supabase/supabase-js';
 
-const githubProvider = new GithubAuthProvider();
+export type CompatUser = {
+  uid: string;
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  providerData: { providerId: string; displayName: string | null; email: string | null; photoURL: string | null }[];
+};
 
-/** Magic-link: send the sign-in email */
-export async function sendMagicLink(email: string, redirectUrl: string) {
-  const actionCodeSettings = {
-    url: redirectUrl,
-    handleCodeInApp: true,
+function toCompatUser(user: User): CompatUser {
+  return {
+    uid: user.id,
+    id: user.id,
+    email: user.email ?? null,
+    displayName: (user.user_metadata?.full_name ?? user.user_metadata?.name ?? null) as string | null,
+    photoURL: (user.user_metadata?.avatar_url ?? null) as string | null,
+    providerData: (user.identities ?? []).map((i) => ({
+      providerId: i.provider === 'github' ? 'github.com' : `${i.provider}.com`,
+      displayName: ((i.identity_data?.name ?? i.identity_data?.full_name) as string | null) ?? null,
+      email: (i.identity_data?.email as string | null) ?? null,
+      photoURL: (i.identity_data?.avatar_url as string | null) ?? null,
+    })),
   };
-  await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+}
+
+let _cachedUser: CompatUser | null = null;
+supabase.auth.onAuthStateChange((_event, session) => {
+  _cachedUser = session?.user ? toCompatUser(session.user) : null;
+});
+
+export async function sendMagicLink(email: string, redirectUrl: string) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: redirectUrl },
+  });
+  if (error) throw error;
   window.localStorage.setItem('emailForSignIn', email);
 }
 
-/** Magic-link: complete sign-in when user lands on the link */
-export async function completeMagicLinkSignIn(email: string, href: string) {
-  if (!isSignInWithEmailLink(auth, href)) {
-    throw new Error('Invalid sign-in link');
-  }
-  return signInWithEmailLink(auth, email, href);
+export async function completeMagicLinkSignIn(_email: string, _href: string) {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session;
 }
 
-/** GitHub OAuth — opens a popup */
 export async function signInWithGitHub() {
-  return signInWithPopup(auth, githubProvider);
+  const { error } = await supabase.auth.signInWithOAuth({ provider: 'github' });
+  if (error) throw error;
 }
 
-/** Sign out */
 export async function signOut() {
-  await firebaseSignOut(auth);
+  await supabase.auth.signOut();
 }
 
-/** Send password reset email */
 export async function sendPasswordReset(email: string, redirectUrl: string) {
-  await sendPasswordResetEmail(auth, email, { url: redirectUrl });
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
+  if (error) throw error;
 }
 
-/** Confirm new password using the reset code from the URL */
-export async function confirmNewPassword(oobCode: string, newPassword: string) {
-  await confirmPasswordReset(auth, oobCode, newPassword);
+export async function confirmNewPassword(_oobCode: string, newPassword: string) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
 }
 
-/** Get current user synchronously */
-export function getCurrentUser(): User | null {
-  return auth.currentUser;
+export function getCurrentUser(): CompatUser | null {
+  return _cachedUser;
 }
 
-/** Subscribe to auth state changes */
-export function onAuthChange(callback: (user: User | null) => void) {
-  return onAuthStateChanged(auth, callback);
+export function onAuthChange(callback: (user: CompatUser | null) => void): () => void {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    callback(session?.user ? toCompatUser(session.user) : null);
+  });
+  return () => subscription.unsubscribe();
 }

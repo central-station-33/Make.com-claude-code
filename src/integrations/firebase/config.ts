@@ -1,28 +1,33 @@
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+// Supabase compatibility stub — replaces the old Firebase config
+import { supabase } from '@/integrations/supabase/client';
+import type { CompatUser } from './authHelpers';
 
-// Firebase project config — set these in your .env file or GitHub secrets:
-//   VITE_FIREBASE_API_KEY
-//   VITE_FIREBASE_AUTH_DOMAIN
-//   VITE_FIREBASE_PROJECT_ID
-//   VITE_FIREBASE_STORAGE_BUCKET
-//   VITE_FIREBASE_MESSAGING_SENDER_ID
-//   VITE_FIREBASE_APP_ID
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+let _currentUser: CompatUser | null = null;
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (session?.user) {
+    const u = session.user;
+    _currentUser = {
+      uid: u.id,
+      id: u.id,
+      email: u.email ?? null,
+      displayName: (u.user_metadata?.full_name ?? u.user_metadata?.name ?? null) as string | null,
+      photoURL: (u.user_metadata?.avatar_url ?? null) as string | null,
+      providerData: (u.identities ?? []).map((i) => ({
+        providerId: i.provider === 'github' ? 'github.com' : `${i.provider}.com`,
+        displayName: ((i.identity_data?.name ?? i.identity_data?.full_name) as string | null) ?? null,
+        email: (i.identity_data?.email as string | null) ?? null,
+        photoURL: (i.identity_data?.avatar_url as string | null) ?? null,
+      })),
+    };
+  } else {
+    _currentUser = null;
+  }
+});
+
+export const auth = {
+  get currentUser() { return _currentUser; },
 };
 
-// Prevent duplicate initialization in hot-reload / SSR environments
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-export default app;
+export const db = supabase;
+export const storage = supabase.storage;
+export default { auth, db, storage };

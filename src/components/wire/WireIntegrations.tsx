@@ -15,18 +15,10 @@ import {
   Key,
   AlertCircle,
 } from 'lucide-react';
-import { auth } from '@/integrations/firebase/config';
-import {
-  getDocuments,
-  createDocument,
-  deleteDocument,
-  COLLECTIONS,
-} from '@/integrations/firebase/firestore';
-import { signInWithGitHub } from '@/integrations/firebase/authHelpers';
+import { supabase } from '@/integrations/supabase/client';
 
-// Update WIRE_API_BASE once you deploy a Firebase Cloud Function or
-// standalone API that replaces the Supabase edge function.
-const WIRE_API_BASE = import.meta.env.VITE_WIRE_API_BASE ?? 'https://YOUR_FIREBASE_REGION-YOUR_PROJECT.cloudfunctions.net/wireApi';
+const WIRE_API_BASE = import.meta.env.VITE_WIRE_API_BASE ?? `${import.meta.env.VITE_SUPABASE_URL ?? ''}/functions/v1/wire-api`;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? '';
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -83,31 +75,30 @@ export function WireIntegrations() {
   const [activeApiKey, setActiveApiKey] = useState('');
 
   useEffect(() => {
-    // Check if current Firebase user signed in with GitHub
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-      const ghData = currentUser.providerData.find((p) => p.providerId === 'github.com');
-      if (ghData) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const identity = session?.user?.identities?.find((i) => i.provider === 'github');
+      if (identity) {
         setGithubUser({
-          login: ghData.displayName ?? ghData.email ?? '',
-          avatar_url: ghData.photoURL ?? '',
+          login: (identity.identity_data?.user_name as string) ?? (identity.identity_data?.email as string) ?? '',
+          avatar_url: (identity.identity_data?.avatar_url as string) ?? '',
         });
       }
-    }
+    });
     loadApiKeys();
   }, []);
 
   const loadApiKeys = async () => {
-    const keys = await getDocuments<{ name: string; key: string; created_at: string }>(
-      COLLECTIONS.WIRE_API_KEYS
-    );
-    setApiKeys(keys as typeof apiKeys);
+    const { data } = await supabase
+      .from('wire_api_keys')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setApiKeys((data ?? []) as typeof apiKeys);
   };
 
   const handleGitHubConnect = async () => {
     setGithubLoading(true);
     try {
-      await signInWithGitHub();
+      await supabase.auth.signInWithOAuth({ provider: 'github' });
     } finally {
       setGithubLoading(false);
     }
@@ -125,18 +116,20 @@ export function WireIntegrations() {
   const handleCreateKey = async () => {
     if (!newKeyName.trim()) return;
     const key = generateKey();
-    const id = await createDocument(COLLECTIONS.WIRE_API_KEYS, {
-      name: newKeyName.trim(),
-      key,
-    });
-    const newEntry = { id, name: newKeyName.trim(), key, created_at: new Date().toISOString() };
-    setApiKeys((prev) => [newEntry, ...prev]);
-    setGeneratedKey(key);
-    setNewKeyName('');
+    const { data } = await supabase
+      .from('wire_api_keys')
+      .insert({ name: newKeyName.trim(), key })
+      .select()
+      .single();
+    if (data) {
+      setApiKeys((prev) => [data as typeof apiKeys[0], ...prev]);
+      setGeneratedKey(key);
+      setNewKeyName('');
+    }
   };
 
   const handleDeleteKey = async (id: string) => {
-    await deleteDocument(COLLECTIONS.WIRE_API_KEYS, id);
+    await supabase.from('wire_api_keys').delete().eq('id', id);
     setApiKeys((prev) => prev.filter((k) => k.id !== id));
   };
 
