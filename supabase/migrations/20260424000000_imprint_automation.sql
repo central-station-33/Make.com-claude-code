@@ -27,6 +27,7 @@ create index if not exists content_queue_scheduled_idx   on public.content_queue
 create index if not exists content_queue_agent_run_idx   on public.content_queue (agent_run_id);
 
 alter table public.content_queue enable row level security;
+drop policy if exists "authenticated users manage content_queue" on public.content_queue;
 create policy "authenticated users manage content_queue"
   on public.content_queue for all
   to authenticated using (true) with check (true);
@@ -55,6 +56,7 @@ create unique index if not exists automation_settings_user_idx
   on public.automation_settings (user_id);
 
 alter table public.automation_settings enable row level security;
+drop policy if exists "users manage own settings" on public.automation_settings;
 create policy "users manage own settings"
   on public.automation_settings for all
   to authenticated
