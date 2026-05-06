@@ -182,10 +182,75 @@ const aiEnrichmentTrigger = async (req, res, next) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// POST /api/webhooks/burnt-out-landlord-scan
+// ---------------------------------------------------------------------------
+const burntOutLandlordScan = async (req, res, next) => {
+  try {
+    const { enrichBurntOutLandlord } = require('../services/burntOutLandlordService');
+    const { upsertScoredProperty, findPropertyById } = require('../database/queries');
+
+    const payload = req.body;
+    const items   = Array.isArray(payload) ? payload : [payload];
+    const results = { processed: 0, burnt_out_found: 0, errors: [] };
+    const burntOut = [];
+
+    for (const item of items) {
+      try {
+        // Accept either a full property object or just a property_id
+        let property = item;
+        if (item.property_id && !item.address) {
+          property = await findPropertyById(item.property_id);
+          if (!property) throw new Error(`Property ${item.property_id} not found`);
+        }
+
+        const normalized = normalizeProperty(property);
+        const enrichment = await enrichBurntOutLandlord(normalized);
+
+        // Merge burnt out score into property scores
+        if (property.id || property.property_id) {
+          const id = property.id || property.property_id;
+          await upsertScoredProperty({
+            ...normalized,
+            burnt_out_landlord_score: enrichment.burnt_out_landlord_score,
+            burnt_out_signals: enrichment.burnt_out_signals,
+            deal_type: enrichment.deal_type_override || normalized.deal_type,
+            property_hash: normalized.property_hash || require('../utils/cryptoHelpers').generatePropertyHash(normalized),
+          });
+        }
+
+        results.processed++;
+        if (enrichment.is_burnt_out_landlord) {
+          results.burnt_out_found++;
+          burntOut.push({
+            address: normalized.full || normalized.address,
+            score: enrichment.burnt_out_landlord_score,
+            signals: enrichment.burnt_out_signals,
+          });
+        }
+      } catch (err) {
+        results.errors.push({ item: item?.address || item?.property_id || 'unknown', error: err.message });
+      }
+    }
+
+    logger.info('Burnt out landlord scan complete', { requestId: req.requestId, ...results });
+
+    res.status(200).json(
+      successResponse(
+        { ...results, burnt_out_properties: burntOut },
+        `Scanned ${results.processed} properties — ${results.burnt_out_found} burnt out landlords found`
+      )
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   ingestRawProperties,
   receiveScoredProperties,
   notificationStatus,
   detectIssues,
   aiEnrichmentTrigger,
+  burntOutLandlordScan,
 };

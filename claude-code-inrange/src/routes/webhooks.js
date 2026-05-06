@@ -7,6 +7,7 @@ const {
   notificationStatus,
   detectIssues,
   aiEnrichmentTrigger,
+  burntOutLandlordScan,
 } = require('../controllers/webhookController');
 const { webhookSignatureVerifier } = require('../middleware/auth');
 
@@ -44,5 +45,12 @@ router.post('/detect-issues', detectIssues);
  * @desc   Trigger AI enrichment for specific properties or a tier
  */
 router.post('/ai-enrichment-trigger', aiEnrichmentTrigger);
+
+/**
+ * @route  POST /api/webhooks/burnt-out-landlord-scan
+ * @desc   Run burnt out landlord detection for NY/NJ properties
+ *         Uses NYC Open Data, NJ MOD-IV, FEMA flood data — all free
+ */
+router.post('/burnt-out-landlord-scan', burntOutLandlordScan);
 
 module.exports = router;
