@@ -12,24 +12,35 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
 
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Deploy core functions (npm imports)
+      - name: Install Supabase CLI
         run: |
-          supabase functions deploy seed-scores    --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
-          supabase functions deploy enrich-pending --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+          curl -fsSL https://github.com/supabase/cli/releases/download/v1.207.9/supabase_linux_amd64.tar.gz \
+            | tar xz -C /tmp
+          sudo mv /tmp/supabase /usr/local/bin/supabase
+          supabase --version
+
+      - name: Verify auth
+        run: supabase projects list --debug
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Deploy legacy functions (best-effort)
+      - name: Deploy seed-scores (no-verify-jwt)
+        run: supabase functions deploy seed-scores --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt --debug
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy enrich-pending (no-verify-jwt)
+        run: supabase functions deploy enrich-pending --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt --debug
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy remaining functions (best-effort)
         continue-on-error: true
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           supabase functions deploy ingest-raw-properties   --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} || true
           supabase functions deploy score-property          --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} || true
@@ -38,5 +49,3 @@ jobs:
           supabase functions deploy fetch-properties        --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} || true
           supabase functions deploy health                  --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} || true
           supabase functions deploy notification-status     --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} || true
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
