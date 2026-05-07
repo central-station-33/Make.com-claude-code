@@ -1,6 +1,15 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      },
+    });
+  }
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -22,14 +31,22 @@ Deno.serve(async () => {
     .select('id, address');
 
   if (error) {
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      `<html><body><h2>Error</h2><pre>${error.message}</pre></body></html>`,
+      { status: 500, headers: { 'Content-Type': 'text/html' } }
+    );
   }
 
+  const count = data?.length ?? 0;
+  const rows = (data ?? []).map((p: { address: string }) => `<li>${p.address}</li>`).join('');
+
   return new Response(
-    JSON.stringify({ success: true, updated: data?.length ?? 0, properties: data }),
-    { headers: { 'Content-Type': 'application/json' } }
+    `<html><body style="font-family:sans-serif;padding:2rem">
+      <h2 style="color:green">Done! ${count} properties scored.</h2>
+      <ul>${rows || '<li>No properties needed scoring</li>'}</ul>
+      <p>All properties now have composite_score=82, priority_tier=Tier 1, enrichment_status=pending.</p>
+      <p>You can close this tab.</p>
+    </body></html>`,
+    { headers: { 'Content-Type': 'text/html' } }
   );
 });
