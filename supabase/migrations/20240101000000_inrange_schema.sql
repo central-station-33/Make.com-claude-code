@@ -172,8 +172,14 @@ ALTER TABLE deals              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notification_log   ENABLE ROW LEVEL SECURITY;
 
 -- Service role bypasses RLS automatically; these policies are for anon/authenticated roles
-CREATE POLICY IF NOT EXISTS "service_role_all" ON raw_properties     FOR ALL USING (true);
-CREATE POLICY IF NOT EXISTS "service_role_all" ON properties         FOR ALL USING (true);
-CREATE POLICY IF NOT EXISTS "service_role_all" ON contact_activities FOR ALL USING (true);
-CREATE POLICY IF NOT EXISTS "service_role_all" ON deals              FOR ALL USING (true);
-CREATE POLICY IF NOT EXISTS "service_role_all" ON notification_log   FOR ALL USING (true);
+DROP POLICY IF EXISTS "service_role_all" ON raw_properties;
+DROP POLICY IF EXISTS "service_role_all" ON properties;
+DROP POLICY IF EXISTS "service_role_all" ON contact_activities;
+DROP POLICY IF EXISTS "service_role_all" ON deals;
+DROP POLICY IF EXISTS "service_role_all" ON notification_log;
+
+CREATE POLICY "service_role_all" ON raw_properties     FOR ALL USING (true);
+CREATE POLICY "service_role_all" ON properties         FOR ALL USING (true);
+CREATE POLICY "service_role_all" ON contact_activities FOR ALL USING (true);
+CREATE POLICY "service_role_all" ON deals              FOR ALL USING (true);
+CREATE POLICY "service_role_all" ON notification_log   FOR ALL USING (true);
