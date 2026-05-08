@@ -127,10 +127,31 @@ export function useWireInbox() {
           await supabase.functions.invoke('send-sms', {
             body: { id: msgRow.id, message: body.trim(), recipient_phone: contact.phone },
           });
+        } else {
+          await supabase.from('wire_messages').update({ status: 'sent' }).eq('id', msgRow.id);
         }
-      }
+      } else if (conv.channel === 'email') {
+        const { data: contact } = await supabase
+          .from('wire_contacts')
+          .select('email')
+          .eq('id', conv.contact_id)
+          .single();
 
-      await supabase.from('wire_messages').update({ status: 'sent' }).eq('id', msgRow.id);
+        if (contact?.email) {
+          await supabase.functions.invoke('send-email', {
+            body: {
+              conversation_id: selectedId,
+              to: contact.email,
+              subject: conv.subject,
+              body: body.trim(),
+            },
+          });
+        } else {
+          await supabase.from('wire_messages').update({ status: 'sent' }).eq('id', msgRow.id);
+        }
+      } else {
+        await supabase.from('wire_messages').update({ status: 'sent' }).eq('id', msgRow.id);
+      }
     } finally {
       setSending(false);
     }

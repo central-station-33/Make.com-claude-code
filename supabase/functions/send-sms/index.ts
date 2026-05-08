@@ -1,116 +1,82 @@
+// Twilio outbound SMS sender for The Wire inbox
+// Called by useWireInbox.sendMessage() for sms channel conversations
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
 interface SMSRequest {
-  id: string
-  message: string
-  recipient_phone: string
+  id: string;            // wire_messages row id to update on delivery
+  message: string;
+  recipient_phone: string;
 }
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   try {
-    const { id, message, recipient_phone }: SMSRequest = await req.json()
+    const { id, message, recipient_phone }: SMSRequest = await req.json();
 
-    // Input validation
     if (!id || !message || !recipient_phone) {
-      throw new Error('Missing required fields: id, message, or recipient_phone')
+      return json({ error: 'Missing required fields: id, message, recipient_phone' }, 400);
     }
 
-    // Get Twilio credentials from environment
-    const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID')
-    const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN')
-    const twilioPhoneNumber = Deno.env.get('TWILIO_PHONE_NUMBER')
+    const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+    const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+    const twilioPhoneNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
 
     if (!twilioAccountSid || !twilioAuthToken || !twilioPhoneNumber) {
-      throw new Error('Missing Twilio configuration')
+      return json({ error: 'Twilio not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER secrets' }, 500);
     }
 
-    const supabaseClient = createClient(
+    const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
+    );
 
-    console.log(`Sending SMS to ${recipient_phone}: ${message}`)
-
-    try {
-      // Send SMS via Twilio
-      const twilioResponse = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': 'Basic ' + btoa(`${twilioAccountSid}:${twilioAuthToken}`),
-          },
-          body: new URLSearchParams({
-            To: recipient_phone,
-            From: twilioPhoneNumber,
-            Body: message,
-          }).toString(),
-        }
-      )
-
-      const twilioData = await twilioResponse.json()
-
-      if (twilioResponse.ok) {
-        console.log('SMS sent successfully', twilioData)
-        // Update message status in database
-        const { error } = await supabaseClient
-          .from('text_messages')
-          .update({
-            status: 'sent',
-            sent_at: new Date().toISOString(),
-            metadata: {
-              twilio_message_sid: twilioData.sid,
-            },
-          })
-          .eq('id', id)
-
-        if (error) {
-          console.error('Error updating message status:', error)
-          throw error
-        }
-
-        return new Response(
-          JSON.stringify({ success: true }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      } else {
-        console.error('Twilio API error:', twilioData)
-        throw new Error(twilioData.message || 'Failed to send SMS')
+    // ── Send via Twilio ──────────────────────────────────────────────────
+    const twilioRes = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: 'Basic ' + btoa(`${twilioAccountSid}:${twilioAuthToken}`),
+        },
+        body: new URLSearchParams({
+          To: recipient_phone,
+          From: twilioPhoneNumber,
+          Body: message,
+        }).toString(),
       }
-    } catch (error) {
-      console.error('Error in SMS sending process:', error)
-      // Update message status to failed
-      await supabaseClient
-        .from('text_messages')
-        .update({
-          status: 'failed',
-          error_message: error.message,
-        })
-        .eq('id', id)
+    );
 
-      throw error
+    const twilioData = await twilioRes.json();
+
+    if (!twilioRes.ok) {
+      console.error('Twilio error:', twilioData);
+      await supabase.from('wire_messages').update({ status: 'failed' }).eq('id', id);
+      return json({ error: twilioData.message ?? 'Twilio send failed' }, 502);
     }
-  } catch (error) {
-    console.error('Error processing request:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    )
+
+    // Mark message delivered in wire_messages
+    await supabase
+      .from('wire_messages')
+      .update({ status: 'delivered' })
+      .eq('id', id);
+
+    return json({ success: true, sid: twilioData.sid });
+  } catch (err) {
+    console.error('send-sms error:', err);
+    return json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
   }
-})
+});
