@@ -1,3 +1,1 @@
 UPDATE properties SET composite_score=82,distress_score=75,deal_quality_score=80,contact_likelihood_score=60,timeline_urgency_score=70,priority_tier='Tier 1',deal_type='Foreclosure',enrichment_status='pending' WHERE composite_score IS NULL;
-
-SELECT id,address,composite_score,priority_tier,enrichment_status FROM properties;

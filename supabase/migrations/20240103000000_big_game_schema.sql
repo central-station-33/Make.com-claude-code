@@ -88,4 +88,3 @@ CREATE POLICY "service_role_all" ON big_game_leads FOR ALL USING (true);
 CREATE INDEX IF NOT EXISTS idx_big_game_properties_source       ON big_game_properties (source);
 CREATE INDEX IF NOT EXISTS idx_big_game_properties_created      ON big_game_properties (created_at);
 CREATE INDEX IF NOT EXISTS idx_big_game_scores_opportunity_fit  ON big_game_scores (opportunity_fit_score DESC);
-CREATE INDEX IF NOT EXISTS idx_big_game_leads_status            ON big_game_leads (assignment_status);
