@@ -33,3 +33,26 @@ ALTER TABLE big_game_properties ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "service_role_all" ON big_game_properties;
 CREATE POLICY "service_role_all" ON big_game_properties FOR ALL USING (true);
+
+-- Big Game Scores
+CREATE TABLE IF NOT EXISTS big_game_scores (
+  id                      SERIAL PRIMARY KEY,
+  property_id             INT REFERENCES big_game_properties(id) ON DELETE CASCADE,
+  opportunity_fit_score   NUMERIC(3,2),
+  opportunity_type        TEXT,
+  decision_maker_signals  TEXT,
+  confidence_level        TEXT,
+  claude_analysis         JSONB,
+  recommended_action      TEXT,
+  tier                    TEXT,
+  scored_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS big_game_scores_prop_idx  ON big_game_scores (property_id);
+CREATE INDEX IF NOT EXISTS big_game_scores_tier_idx  ON big_game_scores (tier);
+CREATE INDEX IF NOT EXISTS big_game_scores_time_idx  ON big_game_scores (scored_at DESC);
+
+ALTER TABLE big_game_scores ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_all" ON big_game_scores;
+CREATE POLICY "service_role_all" ON big_game_scores FOR ALL USING (true);
