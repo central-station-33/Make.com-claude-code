@@ -72,3 +72,11 @@ jobs:
           supabase functions deploy seed-scores              --project-ref $REF || true
           supabase functions deploy handle-agent-interaction --project-ref $REF || true
           supabase functions deploy send-invitation          --project-ref $REF || true
+          supabase functions deploy seed-content-plan        --project-ref $REF || true
+          supabase functions deploy publish-blog-post        --project-ref $REF || true
+          supabase functions deploy publish-social-posts     --project-ref $REF || true
+          supabase functions deploy scheduled-content-runner --project-ref $REF || true
+          supabase functions deploy ai-content-generator     --project-ref $REF || true
+          supabase functions deploy ai-intent-research       --project-ref $REF || true
+          supabase functions deploy ai-lead-capture          --project-ref $REF || true
+          supabase functions deploy ai-search-monitor        --project-ref $REF || true
