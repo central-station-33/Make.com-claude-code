@@ -3,11 +3,10 @@
  * Generates Week 1 drafts for JET Realty Advisors and writes them to content_queue.
  * Called from the ContentPlan UI "Generate Week 1 Drafts" button.
  *
- * Produces 10 drafts:
+ * Produces 9 drafts:
  *   - 2 pillar intro blog posts (Neighborhood Authority + Seller Guide)
  *   - 6 cluster articles (3 buyer, 3 seller)
  *   - 1 market intelligence report
- *   - 1 agent recruitment article
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
@@ -109,14 +108,6 @@ const WEEK1_ARTICLES = [
     type: "blog-post",
     pillar: "Neighborhood Authority",
     tags: ["Jersey City", "Hoboken", "NJ neighborhoods", "NYC commute", "Hudson County"],
-  },
-  {
-    title: "Why Top Real Estate Agents Are Joining JET Realty Advisors in 2026",
-    topic: "joining JET Realty Advisors brokerage NJ NY",
-    audience: "real estate agents evaluating brokerages in NJ and NY",
-    type: "blog-post",
-    pillar: "Agent Recruitment",
-    tags: ["agent recruitment", "NJ brokerage", "JET Realty", "real estate career", "2026"],
   },
   {
     title: "Moving from NYC to New Jersey: The Honest Guide (2026)",
