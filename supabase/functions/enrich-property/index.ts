@@ -1,6 +1,5 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.39.0';
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import Anthropic from 'npm:@anthropic-ai/sdk';
 import { ok, err, handleOptions } from '../_shared/cors.ts';
 
 const buildPrompt = (p: Record<string, unknown>) => `You are a real estate investment analyst. Analyze this distressed property and return ONLY valid JSON.
@@ -32,7 +31,7 @@ Return ONLY this JSON:
   "max_allowable_offer": 0
 }`;
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return handleOptions();
 
   try {
