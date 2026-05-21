@@ -1,0 +1,119 @@
+{
+  "name": "InRange — Seller Lead Intake (Webhook)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": "REPLACE_WITH_YOUR_WEBHOOK_ID", "maxResults": 1 },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": -600, "y": 0 },
+        "restore": { "parameters": { "hook": { "label": "InRange Seller Lead Intake" } } }
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/ingest-raw-properties",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY" },
+          { "name": "Content-Type",  "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"source\":\"seller_intake\",\"raw_data\":{\"address\":\"{{1.property_address}}\",\"city\":\"{{1.city}}\",\"state\":\"{{1.state}}\",\"zip\":\"{{1.zip}}\",\"owner_name\":\"{{1.name}}\",\"owner_phone\":\"{{1.phone}}\",\"owner_email\":\"{{1.email}}\",\"asking_price\":\"{{1.asking_price}}\",\"reason_selling\":\"{{1.reason_selling}}\",\"property_type\":\"{{1.property_type}}\",\"bedrooms\":\"{{1.bedrooms}}\",\"bathrooms\":\"{{1.bathrooms}}\",\"condition\":\"{{1.condition}}\",\"distress_indicators\":\"{{1.distress_indicators}}\"}}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 15000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": -330, "y": 0 } }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/process-raw-properties",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY" },
+          { "name": "Content-Type",  "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"limit\":5}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 30000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": -60, "y": 0 } }
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/enrich-pending",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY" },
+          { "name": "Content-Type",  "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"limit\":3}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 60000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": 210, "y": 0 } }
+    },
+    {
+      "id": 5,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "status": "200",
+        "body": "{\"received\":true,\"message\":\"Lead received and queued for scoring\"}",
+        "headers": [{ "name": "Content-Type", "value": "application/json" }]
+      },
+      "metadata": { "designer": { "x": 480, "y": 0 } }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] }
+  }
+}

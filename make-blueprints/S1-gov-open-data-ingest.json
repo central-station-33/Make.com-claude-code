@@ -1,0 +1,126 @@
+{
+  "name": "S1 — Gov Open Data Ingest → Supabase",
+  "flow": [
+    {
+      "id": 1,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useNewZLibDecompression": true
+      },
+      "mapper": {
+        "url": "https://data.cityofnewyork.us/resource/erm2-nwe9.json?$where=complaint_type=%27UNSANITARY%20CONDITION%27%20OR%20complaint_type=%27HEAT/HOT%20WATER%27%20OR%20complaint_type=%27PAINT/PLASTER%27&$limit=100&$order=created_date%20DESC",
+        "serializeUrl": false,
+        "method": "get",
+        "headers": [],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": "",
+        "sharedfolder": "",
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false
+      },
+      "metadata": {
+        "designer": {
+          "x": -385,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "handleErrors": {
+              "label": "No"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicIterator",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "array": "{{1.data}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": -110,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useNewZLibDecompression": true
+      },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/ingest-raw-properties",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"source\":\"nyc_311\",\"raw_data\":{\"address\":\"{{2.value.incident_address}}\",\"city\":\"{{2.value.city}}\",\"state\":\"NY\",\"zip\":\"{{2.value.incident_zip}}\",\"borough\":\"{{2.value.borough}}\",\"complaint_type\":\"{{2.value.complaint_type}}\",\"descriptor\":\"{{2.value.descriptor}}\",\"status\":\"{{2.value.status}}\",\"created_date\":\"{{2.value.created_date}}\",\"closed_date\":\"{{2.value.closed_date}}\",\"bbl\":\"{{2.value.bbl}}\",\"latitude\":\"{{2.value.latitude}}\",\"longitude\":\"{{2.value.longitude}}\"}}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": "",
+        "sharedfolder": "",
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 165,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "handleErrors": {
+              "label": "No"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us2.make.com"
+  }
+}

@@ -26,6 +26,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Email and token are required");
     }
 
+
     const baseUrl = Deno.env.get("APP_URL") ?? "http://localhost:8080";
     const inviteUrl = `${baseUrl}/auth?invite=${token}`;
     

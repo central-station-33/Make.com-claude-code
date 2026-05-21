@@ -1,0 +1,116 @@
+{
+  "name": "InRange — Burnt-Out Landlord Scan (Daily)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/fetch-properties",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY" },
+          { "name": "Content-Type",  "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"state\":\"NY\",\"limit\":50,\"enrichment_status\":\"skipped\",\"min_score\":30}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 30000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": -600, "y": 0 } }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicIterator",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "array": "{{1.data.properties}}" },
+      "metadata": { "designer": { "x": -330, "y": 0 } }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/burnt-out-landlord-scan",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY" },
+          { "name": "Content-Type",  "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"property_id\":\"{{2.value.id}}\",\"address\":\"{{2.value.address}}\",\"city\":\"{{2.value.city}}\",\"state\":\"{{2.value.state}}\",\"zip\":\"{{2.value.zip}}\",\"owner_name\":\"{{2.value.owner_name}}\",\"owner_state\":\"{{2.value.owner_state}}\",\"assessed_value\":\"{{2.value.assessed_value}}\",\"taxes_owed\":\"{{2.value.taxes_owed}}\"}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 30000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": -60, "y": 0 } }
+    },
+    {
+      "id": 4,
+      "module": "builtin:BasicAggregator",
+      "version": 1,
+      "parameters": { "feeder": 2 },
+      "mapper": { "value": "{{3.data.burnt_out_landlord_score}}" },
+      "metadata": { "designer": { "x": 210, "y": 0 } }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/enrich-pending",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY" },
+          { "name": "Content-Type",  "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"limit\":10}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 120000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": 480, "y": 0 } }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] },
+    "scheduling": {
+      "type": "indefinitely",
+      "interval": 86400
+    }
+  }
+}

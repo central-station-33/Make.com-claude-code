@@ -1,0 +1,74 @@
+name: Deploy Supabase Edge Functions
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - claude/inrange-backend-service-MC9DD
+    paths:
+      - 'supabase/functions/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        id: secrets_check
+        run: |
+          if [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ] || [ -z "${{ secrets.SUPABASE_PROJECT_REF }}" ]; then
+            echo "SECRETS_MISSING=true" >> $GITHUB_OUTPUT
+            echo "⚠️  SUPABASE_ACCESS_TOKEN or SUPABASE_PROJECT_REF not set."
+            echo "    Go to: Settings → Secrets and variables → Actions → New repository secret"
+            echo "    Add: SUPABASE_ACCESS_TOKEN (from supabase.com/dashboard/account/tokens)"
+            echo "    Add: SUPABASE_PROJECT_REF  (value: omzugrtgwsjypekuzgtn)"
+          else
+            echo "SECRETS_MISSING=false" >> $GITHUB_OUTPUT
+            echo "✅ Secrets present"
+          fi
+
+      - name: Install Supabase CLI
+        if: steps.secrets_check.outputs.SECRETS_MISSING == 'false'
+        run: |
+          curl -fsSL https://github.com/supabase/cli/releases/download/v1.207.9/supabase_linux_amd64.tar.gz \
+            | tar xz -C /tmp
+          sudo mv /tmp/supabase /usr/local/bin/supabase
+          supabase --version
+
+      - name: Verify auth
+        if: steps.secrets_check.outputs.SECRETS_MISSING == 'false'
+        run: supabase projects list
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy core pipeline functions
+        if: steps.secrets_check.outputs.SECRETS_MISSING == 'false'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          REF=${{ secrets.SUPABASE_PROJECT_REF }}
+          supabase functions deploy ingest-raw-properties    --project-ref $REF --no-verify-jwt
+          supabase functions deploy process-raw-properties   --project-ref $REF --no-verify-jwt
+          supabase functions deploy score-property           --project-ref $REF --no-verify-jwt
+          supabase functions deploy enrich-pending           --project-ref $REF --no-verify-jwt
+
+      - name: Deploy supporting functions
+        if: steps.secrets_check.outputs.SECRETS_MISSING == 'false'
+        continue-on-error: true
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          REF=${{ secrets.SUPABASE_PROJECT_REF }}
+          supabase functions deploy enrich-property          --project-ref $REF || true
+          supabase functions deploy burnt-out-landlord-scan  --project-ref $REF || true
+          supabase functions deploy fetch-properties         --project-ref $REF || true
+          supabase functions deploy health                   --project-ref $REF || true
+          supabase functions deploy notification-status      --project-ref $REF || true
+          supabase functions deploy seed-scores              --project-ref $REF || true
+          supabase functions deploy handle-agent-interaction --project-ref $REF || true
+          supabase functions deploy send-invitation          --project-ref $REF || true

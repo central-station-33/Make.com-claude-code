@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "make": {
+      "type": "sse",
+      "url": "https://us2.make.com/mcp/u/6f43ed15-1453-4de9-a92a-f4829d5c9376/sse"
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=omzugrtgwsjypekuzgtn&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"
+    }
+  }
+}

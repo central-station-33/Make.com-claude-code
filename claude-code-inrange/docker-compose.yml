@@ -1,0 +1,41 @@
+version: '3.9'
+
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://inrange:inrange@db:5432/inrange
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev_secret}
+      API_KEY: ${API_KEY:-dev_api_key}
+      LOG_LEVEL: debug
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src   # hot-reload in dev
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: inrange
+      POSTGRES_USER: inrange
+      POSTGRES_PASSWORD: inrange
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/database/migrations.sql:/docker-entrypoint-initdb.d/01_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inrange"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
