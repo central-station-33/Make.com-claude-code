@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     status: allOk ? 'healthy' : 'degraded',
     checks,
     latency_ms: Date.now() - start,
-    version: '1.0.0',
+    version: '1.1.0',
   };
 
   if (!allOk) {
