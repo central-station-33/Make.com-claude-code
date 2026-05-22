@@ -1,0 +1,75 @@
+{
+  "name": "InRange — 03: AI Enrich + Notify (Daily 6 AM ET)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/enrich-ai",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "x-make-secret", "value": "YOUR_MAKE_WEBHOOK_SECRET" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"limit\":20}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 300000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": -300, "y": 0 } }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/notify-subscribers",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "x-make-secret", "value": "YOUR_MAKE_WEBHOOK_SECRET" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 60000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 } }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] },
+    "scheduling": {
+      "type": "indefinitely",
+      "interval": 86400
+    }
+  }
+}
