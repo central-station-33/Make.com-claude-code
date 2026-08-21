@@ -60,7 +60,15 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
-  const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
+
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "ANTHROPIC_API_KEY is not set in Edge Function secrets. Go to Supabase → Settings → Edge Functions → Add secret." }),
+      { status: 503, headers: { ...cors, "Content-Type": "application/json" } }
+    );
+  }
+  const anthropic = new Anthropic({ apiKey });
 
   let limit = 10;
   try {

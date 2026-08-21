@@ -42,7 +42,7 @@
               "version": 3,
               "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
               "mapper": {
-                "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/score-properties",
+                "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/process-raw-properties",
                 "serializeUrl": false,
                 "method": "post",
                 "headers": [

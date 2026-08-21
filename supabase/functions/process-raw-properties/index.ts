@@ -30,12 +30,16 @@ const NYC311_MAP: Record<string, string[]> = {
 
 const mapNYC311 = (raw: Record<string, unknown>): Record<string, unknown> => {
   const complaint = String(raw.complaint_type || "").toUpperCase();
-  const indicators: Set<string> = new Set(["code_violation"]);
+  // Start with any pre-set indicators (e.g. from ingest-nyc which sets them directly)
+  const preSet = Array.isArray(raw.distress_indicators)
+    ? (raw.distress_indicators as string[])
+    : [];
+  const indicators: Set<string> = new Set(preSet.length ? preSet : ["code_violation"]);
   for (const [key, vals] of Object.entries(NYC311_MAP)) {
     if (complaint.includes(key)) vals.forEach((v) => indicators.add(v));
   }
   return {
-    source:              "nyc_311",
+    source:              String(raw.source || "nyc_311"),
     address:             raw.address || raw.incident_address || "",
     city:                raw.city || raw.borough || "NEW YORK",
     state:               "NY",
@@ -43,7 +47,7 @@ const mapNYC311 = (raw: Record<string, unknown>): Record<string, unknown> => {
     property_type:       raw.building_type || "unknown",
     distress_indicators: [...indicators],
     notice_date:         raw.created_date || raw.notice_date || null,
-    process_stage:       "code violation",
+    process_stage:       String(raw.process_stage || "code violation"),
     estimated_arv:       raw.estimated_arv   || null,
     assessed_value:      raw.assessed_value  || null,
     owner_name:          raw.owner_name      || "",
@@ -63,11 +67,17 @@ const NJ_CLASS_MAP: Record<string, string> = {
 
 const mapNJMODIV = (raw: Record<string, unknown>): Record<string, unknown> => {
   const indicators: string[] = [];
-  if (Number(raw.delinquent_amount) > 0)    indicators.push("tax_delinquent");
-  if (Number(raw.delinquent_amount) > 5000)  indicators.push("tax_lien");
-  if (raw.code_violations)                   indicators.push("code_violation");
-  if (Number(raw.years_owned) >= 15)         indicators.push("burnt_out_landlord");
-  if (!indicators.length)                    indicators.push("code_violation");
+  if (Number(raw.delinquent_amount) > 0)   indicators.push("tax_delinquent");
+  if (Number(raw.delinquent_amount) > 5000) indicators.push("tax_lien");
+  if (raw.code_violations)                  indicators.push("code_violation");
+  if (Number(raw.years_owned) >= 15)        indicators.push("burnt_out_landlord");
+  if (raw.out_of_state_owner)               indicators.push("out_of_state_owner");
+  if (!indicators.length)                   indicators.push("code_violation");
+
+  // Infer owner_state from mailing address if not explicitly provided
+  const ownerState = raw.owner_state
+    || (raw.owner_mailing_address ? extractStateFromAddress(String(raw.owner_mailing_address)) : "")
+    || "";
 
   return {
     source:              "nj_mod_iv",
@@ -75,24 +85,35 @@ const mapNJMODIV = (raw: Record<string, unknown>): Record<string, unknown> => {
     city:                raw.city || raw.municipality || "",
     state:               "NJ",
     zip:                 raw.zip || raw.postal_code || "",
-    property_type:       NJ_CLASS_MAP[String(raw.property_class || "")] || "unknown",
+    county:              raw.county || "",
+    property_type:       NJ_CLASS_MAP[String(raw.property_class || raw.property_type || "")] || "unknown",
     distress_indicators: indicators,
     estimated_arv:       raw.estimated_arv  || null,
     assessed_value:      raw.assessed_value || null,
     taxes_owed:          raw.delinquent_amount || null,
     owner_name:          raw.owner_name    || "",
     owner_mailing_address: raw.owner_mailing_address || "",
-    year_built:          raw.year_built    || null,
     owner_type:          raw.owner_type    || "unknown",
+    owner_state:         ownerState,
+    year_built:          raw.year_built    || null,
+    process_stage:       raw.process_stage || "",
   };
+};
+
+// Extract US state code from the end of a mailing address string
+// e.g. "123 Main St, Hoboken, NJ 07030" → "NJ"
+const extractStateFromAddress = (addr: string): string => {
+  const m = addr.match(/,?\s+([A-Z]{2})\s+\d{5}(-\d{4})?$/);
+  return m ? m[1] : "";
 };
 
 // Add new source mappers here as new Make.com data sources come online
 const SOURCE_MAPPERS: Record<string, (raw: Record<string, unknown>) => Record<string, unknown>> = {
-  nyc_311:    mapNYC311,
-  nyc_hpd:    mapNYC311,
-  nj_mod_iv:  mapNJMODIV,
-  nj_parcels: mapNJMODIV,
+  nyc_311:       mapNYC311,
+  nyc_hpd:       mapNYC311,
+  nyc_evictions: mapNYC311,  // evictions share same NYC address structure
+  nj_mod_iv:     mapNJMODIV,
+  nj_parcels:    mapNJMODIV,
 };
 
 Deno.serve(async (req) => {
