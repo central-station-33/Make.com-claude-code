@@ -108,7 +108,7 @@ const createDeal = async (req, res, next) => {
 };
 
 // ---------------------------------------------------------------------------
-// POST /api/enrich  (on-demand enrichment from Retool)
+// POST /api/enrich  (on-demand enrichment from Noloco)
 // ---------------------------------------------------------------------------
 const triggerEnrichment = async (req, res, next) => {
   try {

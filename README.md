@@ -1,5 +1,5 @@
-# -CC-Make-Retool
-CC + Make.com + Retool automation hub for Jet Realty Advisors
+# InRange — Make.com + Noloco + Claude AI
+Distressed property lead pipeline for Jet Realty Advisors
 # JRA Automation Hub — Make.com + Claude AI Workflows
 
 > Automated workflow scenarios powering Jet Realty Advisors' 

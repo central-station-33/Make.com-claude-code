@@ -165,7 +165,7 @@ const calculateBurntOutLandlordScore = (property, signals = {}, floodData = null
 };
 
 // ---------------------------------------------------------------------------
-// Detect burnt out signals list (for display in Retool / Claude prompt)
+// Detect burnt out signals list (for display in Noloco / Claude prompt)
 // ---------------------------------------------------------------------------
 
 /**

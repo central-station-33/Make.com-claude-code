@@ -13,6 +13,8 @@ Score: ${p.composite_score}/100 (${p.priority_tier})
 Owner: ${p.owner_name} | Type: ${p.owner_type} | Out-of-State: ${p.state !== p.owner_state ? 'Yes' : 'No'}
 Auction: ${p.auction_date || 'N/A'} | Stage: ${p.process_stage || 'N/A'}
 
+Outreach is social/digital only — no cold mail. Sellers: all ages via Facebook (name+city), Instagram (under 45), LinkedIn (LLC owners), Nextdoor. Buyers/investors (35-50): LinkedIn, Facebook Groups, Instagram.
+
 Return ONLY this JSON:
 {
   "investment_thesis": "2-3 sentence thesis",
@@ -24,8 +26,9 @@ Return ONLY this JSON:
     "best_strategy": "wholesale|fix_and_flip|buy_and_hold|subject_to"
   },
   "risks": ["risk1", "risk2"],
-  "contact_strategy": "specific outreach approach",
-  "talking_points": ["point1", "point2", "point3"],
+  "contact_strategy": "specific social media platform and search approach to find this owner",
+  "social_platforms": ["platform1: specific action", "platform2: specific action"],
+  "talking_points": ["short DM-style opener", "value prop for this situation", "low-pressure close"],
   "red_flags": [],
   "recommended_offer": 0,
   "max_allowable_offer": 0

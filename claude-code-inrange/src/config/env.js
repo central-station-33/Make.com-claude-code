@@ -35,8 +35,8 @@ const config = {
     webhookSecret: optional('WEBHOOK_SECRET', ''),
     apiKey: optional('API_KEY', ''),
   },
-  retool: {
-    domain: optional('RETOOL_DOMAIN', ''),
+  noloco: {
+    domain: optional('NOLOCO_DOMAIN', ''),
   },
   geocoding: {
     googleApiKey: optional('GOOGLE_MAPS_API_KEY', ''),

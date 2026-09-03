@@ -31,9 +31,9 @@ app.set('trust proxy', 1);
 // ---------------------------------------------------------------------------
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow Retool domain, no-origin (server-to-server), and localhost in dev
+    // Allow Noloco domain, no-origin (server-to-server), and localhost in dev
     const allowed = [
-      config.retool.domain,
+      config.noloco.domain,
       'http://localhost:3000',
       'http://localhost:5173',
     ].filter(Boolean);
@@ -67,7 +67,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/properties', propertyRoutes);
 
-// Convenience aliases expected by Retool
+// Convenience aliases expected by Noloco
 app.use('/api/stats',            propertyRoutes);
 app.use('/api/search',           propertyRoutes);
 app.use('/api/contact-activity', propertyRoutes);
