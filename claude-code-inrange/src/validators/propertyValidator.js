@@ -82,7 +82,7 @@ const notificationStatusSchema = Joi.object({
 }).unknown(true);
 
 // ---------------------------------------------------------------------------
-// Contact activity payload (from Noloco)
+// Contact activity payload (from JetAdmin)
 // ---------------------------------------------------------------------------
 const contactActivitySchema = Joi.object({
   property_id: Joi.string().required(),
@@ -94,7 +94,7 @@ const contactActivitySchema = Joi.object({
 });
 
 // ---------------------------------------------------------------------------
-// Deal payload (from Noloco)
+// Deal payload (from JetAdmin)
 // ---------------------------------------------------------------------------
 const dealSchema = Joi.object({
   property_id: Joi.string().required(),

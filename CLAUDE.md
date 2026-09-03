@@ -3,7 +3,7 @@
 ## Existing Infrastructure (DO NOT duplicate these)
 - **Database:** Supabase PostgreSQL — use this, not a separate DB
 - **Backend:** Supabase Edge Functions — use these, not Render/Railway/Fly
-- **Frontend/Dashboard:** Noloco — connects directly to Supabase
+- **Frontend/Dashboard:** JetAdmin — connects directly to Supabase
 - **Automation:** Make.com (us2.make.com) — handles orchestration & scheduling
 - **Code Storage:** GitHub (central-station-33/Make.com-claude-code)
 - **AI:** Claude API via Anthropic
@@ -16,7 +16,7 @@ Supabase Edge Functions (scoring, normalization, AI enrichment)
     ↓
 Supabase PostgreSQL Database
     ↑
-Noloco Dashboard (direct Supabase connection)
+JetAdmin Dashboard (direct Supabase connection)
 ```
 
 ## Target Markets
@@ -42,6 +42,6 @@ Noloco Dashboard (direct Supabase connection)
 - Duplicate services that Supabase already provides
 
 ## Always Ask Before Building
-- Does this already exist in Make.com/Noloco/Supabase?
+- Does this already exist in Make.com/JetAdmin/Supabase?
 - Can Supabase Edge Functions handle this instead of a separate server?
 - What's the Supabase project URL for this feature?

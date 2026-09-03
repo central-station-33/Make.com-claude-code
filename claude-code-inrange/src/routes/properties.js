@@ -45,13 +45,13 @@ router.get('/:id', getPropertyById);
 
 /**
  * @route  POST /api/contact-activity
- * @desc   Log a contact attempt (called from Noloco)
+ * @desc   Log a contact attempt (called from JetAdmin)
  */
 router.post('/contact-activity', logContact);
 
 /**
  * @route  POST /api/deals
- * @desc   Log or update a deal status (called from Noloco)
+ * @desc   Log or update a deal status (called from JetAdmin)
  */
 router.post('/deals', createDeal);
 

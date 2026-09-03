@@ -35,8 +35,8 @@ const config = {
     webhookSecret: optional('WEBHOOK_SECRET', ''),
     apiKey: optional('API_KEY', ''),
   },
-  noloco: {
-    domain: optional('NOLOCO_DOMAIN', ''),
+  jetadmin: {
+    domain: optional('JETADMIN_DOMAIN', ''),
   },
   geocoding: {
     googleApiKey: optional('GOOGLE_MAPS_API_KEY', ''),
