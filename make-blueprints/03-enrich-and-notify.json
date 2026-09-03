@@ -7,7 +7,7 @@
       "version": 3,
       "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
       "mapper": {
-        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/enrich-ai",
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/enrich-pending",
         "serializeUrl": false,
         "method": "post",
         "headers": [
@@ -27,28 +27,12 @@
       "metadata": { "designer": { "x": -300, "y": 0 } }
     },
     {
+      "_comment": "notify-subscribers step removed — function does not exist yet. Add notification (email/SMS) here when built.",
       "id": 2,
-      "module": "http:ActionSendData",
-      "version": 3,
-      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
-      "mapper": {
-        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/notify-subscribers",
-        "serializeUrl": false,
-        "method": "post",
-        "headers": [
-          { "name": "x-make-secret", "value": "YOUR_MAKE_WEBHOOK_SECRET" },
-          { "name": "Content-Type", "value": "application/json" }
-        ],
-        "qs": [],
-        "bodyType": "raw",
-        "contentType": "application/json",
-        "body": "{}",
-        "parseResponse": true,
-        "responsetype": "json",
-        "timeout": 60000,
-        "rejectUnauthorized": true,
-        "followRedirect": true
-      },
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "name": "placeholder", "value": "Notification step pending implementation" },
       "metadata": { "designer": { "x": 0, "y": 0 } }
     }
   ],

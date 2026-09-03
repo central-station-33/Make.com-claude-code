@@ -82,6 +82,14 @@ Deno.serve(async (req) => {
     if (body.limit) limit = Math.min(Number(body.limit), 25);
   } catch { /* no body */ }
 
+  // Reset any records stuck in 'processing' for more than 15 minutes (crash/timeout recovery)
+  const staleThreshold = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  await supabase
+    .from("properties")
+    .update({ enrichment_status: "pending" })
+    .eq("enrichment_status", "processing")
+    .lt("updated_at", staleThreshold);
+
   const { data: properties, error } = await supabase
     .from("properties")
     .select("*")
