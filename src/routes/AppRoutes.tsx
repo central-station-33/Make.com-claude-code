@@ -15,6 +15,8 @@ const SalesFunnel = lazy(() => import(/* webpackChunkName: "sales-funnel" */ '@/
 const Marketing = lazy(() => import(/* webpackChunkName: "marketing" */ '@/pages/Marketing'));
 const Communications = lazy(() => import(/* webpackChunkName: "communications" */ '@/pages/Communications'));
 const AIVisibility = lazy(() => import(/* webpackChunkName: "ai-visibility" */ '@/pages/AIVisibility'));
+const InRangeLeads = lazy(() => import(/* webpackChunkName: "inrange-leads" */ '@/pages/InRangeLeads'));
+const InRangeLeadDetail = lazy(() => import(/* webpackChunkName: "inrange-detail" */ '@/pages/InRangeLeadDetail'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen bg-background">
@@ -139,6 +141,23 @@ export const AppRoutes = () => {
           element={
             <PrivateRoute>
               <AIVisibility />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/inrange"
+          element={
+            <PrivateRoute>
+              <InRangeLeads />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/inrange/:id"
+          element={
+            <PrivateRoute>
+              <InRangeLeadDetail />
             </PrivateRoute>
           }
         />

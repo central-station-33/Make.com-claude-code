@@ -11,8 +11,7 @@
  *  5. Writes all drafts to content_queue with status = 'pending'
  *  6. If auto_publish_* flags are set, immediately triggers the publish functions
  */
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -142,7 +141,7 @@ async function generateSocialVariants(apiKey: string, brand: string, blogTitle: 
   return { linkedin, twitter, facebook, instagram };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

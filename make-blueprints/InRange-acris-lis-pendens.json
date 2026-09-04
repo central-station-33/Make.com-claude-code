@@ -1,0 +1,136 @@
+{
+  "name": "InRange — NYC ACRIS Lis Pendens Ingest (Daily)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://data.cityofnewyork.us/resource/bnx9-e6tj.json?$where=doc_type='LISPE'&$limit=200&$order=recorded_datetime DESC",
+        "serializeUrl": false,
+        "method": "get",
+        "headers": [],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 30000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": -600, "y": 0 } }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicIterator",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "array": "{{1.data}}" },
+      "metadata": { "designer": { "x": -330, "y": 0 } }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/ingest-raw-properties",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY" },
+          { "name": "Content-Type",  "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"source\":\"nyc_acris\",\"raw_data\":{\"document_id\":\"{{2.value.document_id}}\",\"doc_type\":\"{{2.value.doc_type}}\",\"recorded_datetime\":\"{{2.value.recorded_datetime}}\",\"modified_date\":\"{{2.value.modified_date}}\",\"reel_yr\":\"{{2.value.reel_yr}}\",\"reel_nbr\":\"{{2.value.reel_nbr}}\",\"reel_pg\":\"{{2.value.reel_pg}}\",\"percent_trans\":\"{{2.value.percent_trans}}\",\"good_through_date\":\"{{2.value.good_through_date}}\"}}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 15000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": -60, "y": 0 } }
+    },
+    {
+      "id": 4,
+      "module": "builtin:BasicAggregator",
+      "version": 1,
+      "parameters": { "feeder": 2 },
+      "mapper": { "value": "{{3.statusCode}}" },
+      "metadata": { "designer": { "x": 210, "y": 0 } }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/process-raw-properties",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY" },
+          { "name": "Content-Type",  "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"limit\":200}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 60000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": 480, "y": 0 } }
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/enrich-pending",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY" },
+          { "name": "Content-Type",  "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"limit\":10}",
+        "parseResponse": true,
+        "responsetype": "json",
+        "timeout": 120000,
+        "rejectUnauthorized": true,
+        "followRedirect": true
+      },
+      "metadata": { "designer": { "x": 750, "y": 0 } }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] },
+    "scheduling": {
+      "type": "indefinitely",
+      "interval": 86400
+    }
+  }
+}

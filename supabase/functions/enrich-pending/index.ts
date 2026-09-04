@@ -35,6 +35,11 @@ CONTACT: Phone: ${p.owner_phone ? "YES" : "NO"} | Email: ${p.owner_email ? "YES"
 
 PROPERTY DETAILS: ${p.property_type || "unknown"} | ${p.bedrooms ?? "?"}bd / ${p.bathrooms ?? "?"}ba | ${p.square_footage ?? "?"}sqft | Built: ${p.year_built ?? "?"}
 
+OUTREACH CONTEXT:
+- Sellers: all ages — use Facebook (name + city search), Instagram (under 45), LinkedIn (LLC/corporate owners), Nextdoor (neighborhood context)
+- Buyers/investors: age 35-50 — use LinkedIn, Facebook investor groups, Instagram real estate community
+- No cold mail. All outreach is social/digital first.
+
 Respond with ONLY this JSON:
 {
   "investment_thesis": "2-3 sentences specific to this distress type, location, and owner situation",
@@ -46,10 +51,11 @@ Respond with ONLY this JSON:
     "recommended_offer": 0
   },
   "risks": ["risk specific to this deal", "risk 2", "risk 3"],
-  "contact_strategy": "specific opening line and approach given the owner type and distress situation",
-  "talking_points": ["tailored point 1", "tailored point 2", "tailored point 3"],
+  "contact_strategy": "specific social media platform and search approach to find this owner (e.g. 'Search Facebook for [owner name] in [city] — look for local business page or personal profile. If LLC, search LinkedIn for managing member')",
+  "social_platforms": ["platform1: specific action", "platform2: specific action"],
+  "talking_points": ["short DM-style opener", "value prop for this specific situation", "low-pressure close"],
   "red_flags": ["anything that needs verification before making offer"],
-  "priority_action": "single most important step to take within 48 hours"
+  "priority_action": "single most important social media step to take within 48 hours"
 }`;
 };
 
@@ -60,13 +66,29 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
-  const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
+
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "ANTHROPIC_API_KEY is not set in Edge Function secrets. Go to Supabase → Settings → Edge Functions → Add secret." }),
+      { status: 503, headers: { ...cors, "Content-Type": "application/json" } }
+    );
+  }
+  const anthropic = new Anthropic({ apiKey });
 
   let limit = 10;
   try {
     const body = await req.json().catch(() => ({}));
     if (body.limit) limit = Math.min(Number(body.limit), 25);
   } catch { /* no body */ }
+
+  // Reset any records stuck in 'processing' for more than 15 minutes (crash/timeout recovery)
+  const staleThreshold = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  await supabase
+    .from("properties")
+    .update({ enrichment_status: "pending" })
+    .eq("enrichment_status", "processing")
+    .lt("updated_at", staleThreshold);
 
   const { data: properties, error } = await supabase
     .from("properties")
