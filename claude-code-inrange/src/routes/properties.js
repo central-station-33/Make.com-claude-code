@@ -45,13 +45,13 @@ router.get('/:id', getPropertyById);
 
 /**
  * @route  POST /api/contact-activity
- * @desc   Log a contact attempt (called from JetAdmin)
+ * @desc   Log a contact attempt (called from Retool)
  */
 router.post('/contact-activity', logContact);
 
 /**
  * @route  POST /api/deals
- * @desc   Log or update a deal status (called from JetAdmin)
+ * @desc   Log or update a deal status (called from Retool)
  */
 router.post('/deals', createDeal);
 

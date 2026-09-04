@@ -108,7 +108,7 @@ const createDeal = async (req, res, next) => {
 };
 
 // ---------------------------------------------------------------------------
-// POST /api/enrich  (on-demand enrichment from JetAdmin)
+// POST /api/enrich  (on-demand enrichment from Retool)
 // ---------------------------------------------------------------------------
 const triggerEnrichment = async (req, res, next) => {
   try {

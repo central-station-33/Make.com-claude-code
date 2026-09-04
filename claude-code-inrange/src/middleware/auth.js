@@ -4,7 +4,7 @@ const logger = require('../config/logger');
 const { errorResponse } = require('../utils/responseFormatter');
 
 /**
- * Verify API key for JetAdmin / internal requests.
+ * Verify API key for Retool / internal requests.
  */
 const apiKeyAuth = (req, res, next) => {
   if (!config.security.apiKey) return next();

@@ -82,7 +82,7 @@ const notificationStatusSchema = Joi.object({
 }).unknown(true);
 
 // ---------------------------------------------------------------------------
-// Contact activity payload (from JetAdmin)
+// Contact activity payload (from Retool)
 // ---------------------------------------------------------------------------
 const contactActivitySchema = Joi.object({
   property_id: Joi.string().required(),
@@ -94,7 +94,7 @@ const contactActivitySchema = Joi.object({
 });
 
 // ---------------------------------------------------------------------------
-// Deal payload (from JetAdmin)
+// Deal payload (from Retool)
 // ---------------------------------------------------------------------------
 const dealSchema = Joi.object({
   property_id: Joi.string().required(),
