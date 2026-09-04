@@ -1,5 +1,5 @@
 
-import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, PauseCircle, Sparkles } from "lucide-react";
+import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, PauseCircle, Sparkles, MapPin } from "lucide-react";
 import SidebarNavItem from "./SidebarNavItem";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +26,12 @@ const SidebarNav = () => {
   ];
 
   const agentManagementItems = [
+    {
+      id: "inrange-leads",
+      path: "/inrange",
+      icon: MapPin,
+      label: "InRange Leads"
+    },
     {
       id: "lead-control",
       path: "/lead-control",
