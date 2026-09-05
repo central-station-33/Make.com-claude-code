@@ -14,7 +14,6 @@ const LeadDetails = lazy(() => import(/* webpackChunkName: "lead-details" */ '@/
 const SalesFunnel = lazy(() => import(/* webpackChunkName: "sales-funnel" */ '@/pages/SalesFunnel'));
 const Marketing = lazy(() => import(/* webpackChunkName: "marketing" */ '@/pages/Marketing'));
 const Communications = lazy(() => import(/* webpackChunkName: "communications" */ '@/pages/Communications'));
-const AIVisibility = lazy(() => import(/* webpackChunkName: "ai-visibility" */ '@/pages/AIVisibility'));
 const InRangeLeads = lazy(() => import(/* webpackChunkName: "inrange-leads" */ '@/pages/InRangeLeads'));
 const InRangeLeadDetail = lazy(() => import(/* webpackChunkName: "inrange-detail" */ '@/pages/InRangeLeadDetail'));
 
@@ -134,15 +133,6 @@ export const AppRoutes = () => {
               <Communications />
             </PrivateRoute>
           } 
-        />
-
-        <Route
-          path="/ai-visibility"
-          element={
-            <PrivateRoute>
-              <AIVisibility />
-            </PrivateRoute>
-          }
         />
 
         <Route
