@@ -1,5 +1,24 @@
 export type PriorityTier = 'Tier 1' | 'Tier 2' | 'Tier 3' | 'Tier 4';
 export type EnrichmentStatus = 'pending' | 'processing' | 'complete' | 'failed' | 'skipped';
+export type LeadStatus = 'new_lead' | 'contacted' | 'offer_sent' | 'under_contract' | 'closed' | 'dead';
+
+export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  new_lead: 'New Lead',
+  contacted: 'Contacted',
+  offer_sent: 'Offer Sent',
+  under_contract: 'Under Contract',
+  closed: 'Closed',
+  dead: 'Dead',
+};
+
+export const LEAD_STATUS_COLORS: Record<LeadStatus, string> = {
+  new_lead: 'bg-blue-50 text-blue-700 border-blue-200',
+  contacted: 'bg-teal-50 text-teal-700 border-teal-200',
+  offer_sent: 'bg-purple-50 text-purple-700 border-purple-200',
+  under_contract: 'bg-orange-50 text-orange-700 border-orange-200',
+  closed: 'bg-green-50 text-green-700 border-green-200',
+  dead: 'bg-gray-100 text-gray-500 border-gray-200',
+};
 
 export interface AIAnalysis {
   investment_thesis?: string;
@@ -62,6 +81,11 @@ export interface InRangeLead {
   ai_enriched_at: string | null;
   created_at: string;
   updated_at: string | null;
+  // CRM fields (added via migration)
+  status: LeadStatus | null;
+  notes: string | null;
+  last_contacted_at: string | null;
+  tags: string[] | null;
 }
 
 export type InRangeLeadSummary = Pick<
