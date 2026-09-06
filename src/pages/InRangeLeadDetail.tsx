@@ -115,7 +115,7 @@ export default function InRangeLeadDetail() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate('/inrange')} className="text-gray-500 dark:text-gray-400">
+          <button onClick={() => navigate('/inrange/leads')} className="text-gray-500 dark:text-gray-400">
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex-1 min-w-0">

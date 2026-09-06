@@ -14,8 +14,12 @@ const LeadDetails = lazy(() => import(/* webpackChunkName: "lead-details" */ '@/
 const SalesFunnel = lazy(() => import(/* webpackChunkName: "sales-funnel" */ '@/pages/SalesFunnel'));
 const Marketing = lazy(() => import(/* webpackChunkName: "marketing" */ '@/pages/Marketing'));
 const Communications = lazy(() => import(/* webpackChunkName: "communications" */ '@/pages/Communications'));
+const InRangeHub = lazy(() => import(/* webpackChunkName: "inrange-hub" */ '@/pages/InRangeHub'));
 const InRangeLeads = lazy(() => import(/* webpackChunkName: "inrange-leads" */ '@/pages/InRangeLeads'));
 const InRangeLeadDetail = lazy(() => import(/* webpackChunkName: "inrange-detail" */ '@/pages/InRangeLeadDetail'));
+const InRangeAddLead = lazy(() => import(/* webpackChunkName: "inrange-add" */ '@/pages/InRangeAddLead'));
+const InRangeImportCSV = lazy(() => import(/* webpackChunkName: "inrange-import" */ '@/pages/InRangeImportCSV'));
+const InRangeLists = lazy(() => import(/* webpackChunkName: "inrange-lists" */ '@/pages/InRangeLists'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen bg-background">
@@ -139,7 +143,39 @@ export const AppRoutes = () => {
           path="/inrange"
           element={
             <PrivateRoute>
+              <InRangeHub />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/inrange/leads"
+          element={
+            <PrivateRoute>
               <InRangeLeads />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/inrange/add"
+          element={
+            <PrivateRoute>
+              <InRangeAddLead />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/inrange/import"
+          element={
+            <PrivateRoute>
+              <InRangeImportCSV />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/inrange/lists"
+          element={
+            <PrivateRoute>
+              <InRangeLists />
             </PrivateRoute>
           }
         />

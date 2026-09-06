@@ -119,7 +119,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Top Tier 1 Leads</h2>
                   <button
-                    onClick={() => navigate('/inrange')}
+                    onClick={() => navigate('/inrange/leads')}
                     className="text-xs text-blue-600 dark:text-blue-400 font-medium"
                   >
                     View all
