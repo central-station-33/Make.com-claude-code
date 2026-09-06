@@ -23,17 +23,32 @@ const RESIDENTIAL_CLASSES = "'2','4C','15A','15B','15C'";
 
 const LLC_RE = /\b(LLC|L\.L\.C|INC|CORP|LP|LTD|TRUST|ESTATE|HOLDING|PROP|ASSOC|PARTNER|REALTY|GROUP|CAPITAL)\b/i;
 
-// DEED_DATE is formatted as YYYYMM or YYYYMMDD
+// Strip NJ municipality type suffixes (e.g. "JERSEY CITY CITY" → "JERSEY CITY")
+const cleanMunName = (name: string): string =>
+  name.replace(/\s+(CITY|TWP|TOWNSHIP|BOROUGH|BORO|VILLAGE|TOWN)\s*$/i, "").trim();
+
+// DEED_DATE can be YYYYMM string, YYYYMMDD string, or epoch milliseconds number
 const yearsOwnedFrom = (deedDate: unknown): number => {
   if (!deedDate) return 0;
+  const n = Number(deedDate);
+  // Epoch milliseconds: large positive number (> year 9999 in ms = ~253402300800000)
+  if (!isNaN(n) && n > 9_999_999_999) {
+    const d = new Date(n);
+    if (!isNaN(d.getTime())) {
+      return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    }
+  }
   const s = String(deedDate).trim();
-  if (s.length >= 6) {
+  if (s.length >= 6 && /^\d+$/.test(s)) {
     const year = parseInt(s.slice(0, 4), 10);
     const month = parseInt(s.slice(4, 6), 10) - 1;
     const day = s.length >= 8 ? parseInt(s.slice(6, 8), 10) : 1;
-    const d = new Date(year, month, day);
-    if (!isNaN(d.getTime())) {
-      return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    // Sanity check: year must be plausible
+    if (year >= 1800 && year <= new Date().getFullYear()) {
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) {
+        return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+      }
     }
   }
   return 0;
@@ -47,7 +62,7 @@ const fetchMunicipality = async (
   try {
     const params = new URLSearchParams({
       where: `MUN_NAME LIKE '%${munname}%' AND PROP_CLASS IN (${RESIDENTIAL_CLASSES})`,
-      outFields: "PROP_LOC,MUN_NAME,ZIP_CODE,PROP_CLASS,LAST_YR_TX,NET_VALUE,OWNER_NAME,ST_ADDRESS,CITY_STATE,DEED_DATE,SALE_PRICE,COUNTY",
+      outFields: "PROP_LOC,MUN_NAME,ZIP_CODE,PROP_CLASS,LAST_YR_TX,NET_VALUE,OWNER_NAME,FAC_NAME,ST_ADDRESS,CITY_STATE,DEED_DATE,SALE_PRICE,COUNTY",
       orderByFields: "LAST_YR_TX DESC",
       resultRecordCount: String(perMuni),
       f: "json",
@@ -83,7 +98,8 @@ const toRawRecord = (
   attr: Record<string, unknown>,
   county: string
 ): Record<string, unknown> => {
-  const ownerName  = String(attr.OWNER_NAME || "").trim();
+  // Use OWNER_NAME; fall back to FAC_NAME for apartments/commercial with no owner name
+  const ownerName  = (String(attr.OWNER_NAME || "").trim() || String(attr.FAC_NAME || "").trim());
   const cityState  = String(attr.CITY_STATE || "").trim();
   // Extract state from "CITY, ST" format
   const stateMatch = cityState.match(/,\s*([A-Z]{2})\s*$/);
@@ -95,7 +111,7 @@ const toRawRecord = (
   return {
     source:         "nj_mod_iv",
     address:        String(attr.PROP_LOC || "").trim(),
-    city:           String(attr.MUN_NAME  || "").trim(),
+    city:           cleanMunName(String(attr.MUN_NAME || "").trim()),
     state:          "NJ",
     zip:            String(attr.ZIP_CODE  || "").trim(),
     county,
