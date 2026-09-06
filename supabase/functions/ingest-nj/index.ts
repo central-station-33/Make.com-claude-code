@@ -32,7 +32,8 @@ const yearsOwnedFrom = (saleDate: unknown): number => {
 
 const fetchMunicipality = async (
   munname: string,
-  perMuni: number
+  perMuni: number,
+  errors: string[]
 ): Promise<Record<string, unknown>[]> => {
   try {
     const params = new URLSearchParams({
@@ -43,15 +44,28 @@ const fetchMunicipality = async (
       f: "json",
     });
 
-    const res = await fetch(`${NJOGIS}?${params}`, {
+    const url = `${NJOGIS}?${params}`;
+    console.log(`Fetching NJOGIS: ${munname}`);
+
+    const res = await fetch(url, {
+      headers: { "User-Agent": "InRange/1.0" },
       signal: AbortSignal.timeout(25000),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+    }
 
-    const json = await res.json() as { features?: { attributes: Record<string, unknown> }[] };
-    return (json.features || []).map((f) => f.attributes);
+    const json = await res.json() as { features?: { attributes: Record<string, unknown> }[]; error?: { message: string } };
+    if (json.error) throw new Error(`ArcGIS error: ${json.error.message}`);
+
+    const features = json.features || [];
+    console.log(`NJOGIS ${munname}: ${features.length} features`);
+    return features.map((f) => f.attributes);
   } catch (e) {
-    console.error(`NJOGIS fetch failed for ${munname}:`, e);
+    const msg = `NJOGIS fetch failed for ${munname}: ${String(e)}`;
+    console.error(msg);
+    errors.push(msg);
     return [];
   }
 };
@@ -99,6 +113,39 @@ const toRawRecord = (
   };
 };
 
+const testConnectivity = async (): Promise<Record<string, unknown>> => {
+  const results: Record<string, unknown> = {};
+
+  // Test 1: basic HTTPS to a known-good public API
+  try {
+    const r = await fetch("https://api.github.com/zen", {
+      headers: { "User-Agent": "InRange/1.0" },
+      signal: AbortSignal.timeout(10000),
+    });
+    results.github_status = r.status;
+    results.github_ok = r.ok;
+  } catch (e) {
+    results.github_error = String(e);
+  }
+
+  // Test 2: NJOGIS with no WHERE clause — just fetch 1 record to confirm the service exists
+  try {
+    const params = new URLSearchParams({ where: "1=1", outFields: "*", resultRecordCount: "1", f: "json" });
+    const r = await fetch(`${NJOGIS}?${params}`, {
+      headers: { "User-Agent": "InRange/1.0" },
+      signal: AbortSignal.timeout(15000),
+    });
+    results.njogis_status = r.status;
+    results.njogis_ok = r.ok;
+    const text = await r.text();
+    results.njogis_body_snippet = text.slice(0, 500);
+  } catch (e) {
+    results.njogis_error = String(e);
+  }
+
+  return results;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return handleOptions();
 
@@ -109,6 +156,13 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+
+    // Diagnostic mode — returns connectivity test results without touching the DB
+    if (body.test === true) {
+      const diag = await testConnectivity();
+      return ok(diag, "Connectivity test");
+    }
+
     const perMuni   = Math.min(Number(body.per_municipality || 75), 200);
     const targets   = (body.municipalities as typeof DEFAULT_TARGETS) || DEFAULT_TARGETS;
 
@@ -119,7 +173,7 @@ Deno.serve(async (req) => {
     };
 
     for (const { munname, county } of targets) {
-      const attrs = await fetchMunicipality(munname, perMuni);
+      const attrs = await fetchMunicipality(munname, perMuni, results.errors);
       let muniCount = 0;
 
       for (const attr of attrs) {
