@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { ok, err, handleOptions } from "../_shared/cors.ts";
 
-const NJOGIS = "https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/Parcels_and_MOD_IV_Composite/FeatureServer/0/query";
+const NJOGIS = "https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/Parcels_MODIV_NJ_WM/FeatureServer/0/query";
 
 // High-distress NJ municipalities
 const DEFAULT_TARGETS = [
@@ -113,10 +113,9 @@ const toRawRecord = (
   };
 };
 
-const testConnectivity = async (): Promise<Record<string, unknown>> => {
-  const results: Record<string, unknown> = {};
+const testConnectivity = async (supabase: ReturnType<typeof createClient>): Promise<Record<string, unknown>> => {
+  const results: Record<string, unknown> = { ran_at: new Date().toISOString() };
 
-  // Test 1: basic HTTPS to a known-good public API
   try {
     const r = await fetch("https://api.github.com/zen", {
       headers: { "User-Agent": "InRange/1.0" },
@@ -124,11 +123,13 @@ const testConnectivity = async (): Promise<Record<string, unknown>> => {
     });
     results.github_status = r.status;
     results.github_ok = r.ok;
+    results.github_body = await r.text();
   } catch (e) {
     results.github_error = String(e);
   }
 
-  // Test 2: NJOGIS with no WHERE clause — just fetch 1 record to confirm the service exists
+  // Query the ArcGIS catalog — find services with property/parcel/MOD in name
+  // Test the correct MOD-IV service — fetch 1 record to confirm fields and URL
   try {
     const params = new URLSearchParams({ where: "1=1", outFields: "*", resultRecordCount: "1", f: "json" });
     const r = await fetch(`${NJOGIS}?${params}`, {
@@ -137,11 +138,23 @@ const testConnectivity = async (): Promise<Record<string, unknown>> => {
     });
     results.njogis_status = r.status;
     results.njogis_ok = r.ok;
-    const text = await r.text();
-    results.njogis_body_snippet = text.slice(0, 500);
+    const json = await r.json() as { features?: { attributes: Record<string, unknown> }[]; error?: unknown; fields?: { name: string }[] };
+    results.njogis_error_body = json.error || null;
+    results.njogis_feature_count = (json.features || []).length;
+    results.njogis_field_names = (json.fields || []).map((f: { name: string }) => f.name);
+    if (json.features && json.features[0]) {
+      results.njogis_sample = json.features[0].attributes;
+    }
   } catch (e) {
     results.njogis_error = String(e);
   }
+
+  // Write to raw_properties so we can read results via SQL
+  await supabase.from("raw_properties").upsert({
+    property_hash: "diagnostic_connectivity_test",
+    source: "diagnostic",
+    raw_data: results,
+  }, { onConflict: "property_hash" });
 
   return results;
 };
@@ -159,7 +172,7 @@ Deno.serve(async (req) => {
 
     // Diagnostic mode — returns connectivity test results without touching the DB
     if (body.test === true) {
-      const diag = await testConnectivity();
+      const diag = await testConnectivity(supabase);
       return ok(diag, "Connectivity test");
     }
 
