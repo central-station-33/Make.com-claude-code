@@ -18,16 +18,25 @@ const NJ_CLASS_MAP: Record<string, string> = {
   "15A": "single_family", "15B": "multifamily", "15C": "condo",
 };
 
-// Residential classes worth scanning
+// Residential PROP_CLASS values
 const RESIDENTIAL_CLASSES = "'2','4C','15A','15B','15C'";
 
 const LLC_RE = /\b(LLC|L\.L\.C|INC|CORP|LP|LTD|TRUST|ESTATE|HOLDING|PROP|ASSOC|PARTNER|REALTY|GROUP|CAPITAL)\b/i;
 
-const yearsOwnedFrom = (saleDate: unknown): number => {
-  if (!saleDate) return 0;
-  const d = new Date(String(saleDate));
-  if (isNaN(d.getTime())) return 0;
-  return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+// DEED_DATE is formatted as YYYYMM or YYYYMMDD
+const yearsOwnedFrom = (deedDate: unknown): number => {
+  if (!deedDate) return 0;
+  const s = String(deedDate).trim();
+  if (s.length >= 6) {
+    const year = parseInt(s.slice(0, 4), 10);
+    const month = parseInt(s.slice(4, 6), 10) - 1;
+    const day = s.length >= 8 ? parseInt(s.slice(6, 8), 10) : 1;
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) {
+      return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    }
+  }
+  return 0;
 };
 
 const fetchMunicipality = async (
@@ -37,9 +46,9 @@ const fetchMunicipality = async (
 ): Promise<Record<string, unknown>[]> => {
   try {
     const params = new URLSearchParams({
-      where: `MUNNAME='${munname}' AND PROPCLASS IN (${RESIDENTIAL_CLASSES})`,
-      outFields: "PROPLOCN,MUNNAME,ZIPCODE,PROPCLASS,NETPRPTAX,ASSMNT,OWNERSNAME,ADDR1,ADDR2,OWNERSCITY,OWNERSSTATE,OWNERSZIP,SALEDATE,SALEPRICE",
-      orderByFields: "NETPRPTAX DESC",
+      where: `MUN_NAME LIKE '%${munname}%' AND PROP_CLASS IN (${RESIDENTIAL_CLASSES})`,
+      outFields: "PROP_LOC,MUN_NAME,ZIP_CODE,PROP_CLASS,LAST_YR_TX,NET_VALUE,OWNER_NAME,ST_ADDRESS,CITY_STATE,DEED_DATE,SALE_PRICE,COUNTY",
+      orderByFields: "LAST_YR_TX DESC",
       resultRecordCount: String(perMuni),
       f: "json",
     });
@@ -74,41 +83,36 @@ const toRawRecord = (
   attr: Record<string, unknown>,
   county: string
 ): Record<string, unknown> => {
-  const ownerName  = String(attr.OWNERSNAME || "").trim();
-  const ownerState = String(attr.OWNERSSTATE || "").toUpperCase().trim();
-  const years      = yearsOwnedFrom(attr.SALEDATE);
+  const ownerName  = String(attr.OWNER_NAME || "").trim();
+  const cityState  = String(attr.CITY_STATE || "").trim();
+  // Extract state from "CITY, ST" format
+  const stateMatch = cityState.match(/,\s*([A-Z]{2})\s*$/);
+  const ownerState = stateMatch ? stateMatch[1] : "NJ";
+  const isOOState  = ownerState !== "NJ";
   const isLLC      = LLC_RE.test(ownerName);
-  const isOOState  = ownerState && ownerState !== "NJ";
+  const years      = yearsOwnedFrom(attr.DEED_DATE);
 
-  // Use field names that mapNJMODIV in process-raw-properties understands
   return {
     source:         "nj_mod_iv",
-    address:        String(attr.PROPLOCN || "").trim(),
-    city:           String(attr.MUNNAME  || "").trim(),
+    address:        String(attr.PROP_LOC || "").trim(),
+    city:           String(attr.MUN_NAME  || "").trim(),
     state:          "NJ",
-    zip:            String(attr.ZIPCODE  || "").trim(),
+    zip:            String(attr.ZIP_CODE  || "").trim(),
     county,
-    property_type:  NJ_CLASS_MAP[String(attr.PROPCLASS || "")] || "unknown",
-    assessed_value: Number(attr.ASSMNT   || 0) || null,
-    // No reliable ARV from MOD-IV — leave null, let AI enrichment estimate
+    property_type:  NJ_CLASS_MAP[String(attr.PROP_CLASS || "")] || "unknown",
+    assessed_value: Number(attr.NET_VALUE || 0) || null,
     estimated_arv:  null,
-    // Pass delinquent_amount=0 so mapNJMODIV doesn't skip indicators
     delinquent_amount: 0,
-    // years_owned is read by mapNJMODIV to set burnt_out_landlord indicator
     years_owned:    Math.round(years),
     owner_name:     ownerName,
     owner_mailing_address: [
-      String(attr.ADDR1 || ""),
-      String(attr.ADDR2 || ""),
-      String(attr.OWNERSCITY || ""),
-      String(attr.OWNERSSTATE || ""),
-      String(attr.OWNERSZIP || ""),
+      String(attr.ST_ADDRESS || ""),
+      cityState,
+      String(attr.ZIP_CODE || ""),
     ].filter(Boolean).join(", ").trim(),
     owner_type:     isLLC ? "llc" : "individual",
-    // Explicitly pass owner_state so normalization picks it up
-    owner_state:    ownerState || "NJ",
+    owner_state:    ownerState,
     process_stage:  "pre_foreclosure",
-    // Additional context for process-raw-properties mapper
     out_of_state_owner: isOOState,
   };
 };
@@ -128,8 +132,6 @@ const testConnectivity = async (supabase: ReturnType<typeof createClient>): Prom
     results.github_error = String(e);
   }
 
-  // Query the ArcGIS catalog — find services with property/parcel/MOD in name
-  // Test the correct MOD-IV service — fetch 1 record to confirm fields and URL
   try {
     const params = new URLSearchParams({ where: "1=1", outFields: "*", resultRecordCount: "1", f: "json" });
     const r = await fetch(`${NJOGIS}?${params}`, {
@@ -149,7 +151,6 @@ const testConnectivity = async (supabase: ReturnType<typeof createClient>): Prom
     results.njogis_error = String(e);
   }
 
-  // Write to raw_properties so we can read results via SQL
   await supabase.from("raw_properties").upsert({
     property_hash: "diagnostic_connectivity_test",
     source: "diagnostic",
@@ -170,7 +171,6 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
 
-    // Diagnostic mode — returns connectivity test results without touching the DB
     if (body.test === true) {
       const diag = await testConnectivity(supabase);
       return ok(diag, "Connectivity test");
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
       let muniCount = 0;
 
       for (const attr of attrs) {
-        if (!attr.PROPLOCN) continue;
+        if (!attr.PROP_LOC) continue;
 
         const rawData = toRawRecord(attr, county);
         const addr    = String(rawData.address || "").toUpperCase().trim();
