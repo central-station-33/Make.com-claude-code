@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
-import { InRangeLead, PriorityTier } from '@/types/inrange';
-import { Loader2, ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Home, DollarSign, Share2, MessageCircle, TrendingUp, ShieldAlert } from 'lucide-react';
+import { InRangeLead, PriorityTier, LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_COLORS } from '@/types/inrange';
+import { Loader2, ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Home, DollarSign, Share2, MessageCircle, TrendingUp, ShieldAlert, StickyNote } from 'lucide-react';
 
 const TIER_COLORS: Record<PriorityTier, string> = {
   'Tier 1': 'bg-red-100 text-red-700 border-red-300',
@@ -17,6 +17,7 @@ const fmt$ = (v: number | null | undefined) =>
 
 const TABS = [
   { id: 'outreach', label: 'Outreach', icon: Share2 },
+  { id: 'notes', label: 'Notes', icon: StickyNote },
   { id: 'analysis', label: 'Analysis', icon: TrendingUp },
   { id: 'owner', label: 'Owner', icon: Home },
   { id: 'financials', label: 'Financials', icon: DollarSign },
@@ -40,7 +41,38 @@ const Card = ({ children, className = '' }: { children: React.ReactNode; classNa
 export default function InRangeLeadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('outreach');
+  const [notes, setNotes] = useState('');
+  const [notesSaved, setNotesSaved] = useState(false);
+
+  const saveNotes = useMutation({
+    mutationFn: async (text: string) => {
+      const { error } = await inrange
+        .from('properties')
+        .update({ notes: text } as any)
+        .eq('id', id!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setNotesSaved(true);
+      setTimeout(() => setNotesSaved(false), 2000);
+    },
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: async (status: LeadStatus) => {
+      const { error } = await inrange
+        .from('properties')
+        .update({ status } as any)
+        .eq('id', id!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inrange-lead', id] });
+      queryClient.invalidateQueries({ queryKey: ['inrange-leads'] });
+    },
+  });
 
   const { data: lead, isLoading, error } = useQuery({
     queryKey: ['inrange-lead', id],
@@ -51,7 +83,9 @@ export default function InRangeLeadDetail() {
         .eq('id', id)
         .single();
       if (error) throw error;
-      return data as InRangeLead;
+      const lead = data as InRangeLead;
+      if (lead.notes) setNotes(lead.notes);
+      return lead;
     },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
@@ -81,7 +115,7 @@ export default function InRangeLeadDetail() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate('/inrange')} className="text-gray-500 dark:text-gray-400">
+          <button onClick={() => navigate('/inrange/leads')} className="text-gray-500 dark:text-gray-400">
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex-1 min-w-0">
@@ -91,6 +125,35 @@ export default function InRangeLeadDetail() {
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${TIER_COLORS[lead.priority_tier]}`}>
             {lead.priority_tier}
           </span>
+        </div>
+
+        {/* Status + action buttons */}
+        <div className="px-4 pb-2 flex items-center gap-2 flex-wrap">
+          <select
+            value={lead.status ?? 'new_lead'}
+            onChange={(e) => updateStatus.mutate(e.target.value as LeadStatus)}
+            className={`text-xs font-medium rounded-full border px-3 py-1 cursor-pointer appearance-none ${LEAD_STATUS_COLORS[lead.status ?? 'new_lead']}`}
+          >
+            {(Object.keys(LEAD_STATUS_LABELS) as LeadStatus[]).map((s) => (
+              <option key={s} value={s}>{LEAD_STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+          {lead.owner_phone && (
+            <a
+              href={`tel:${lead.owner_phone}`}
+              className="flex items-center gap-1.5 text-xs font-medium bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-full px-3 py-1"
+            >
+              <Phone className="h-3 w-3" /> Call
+            </a>
+          )}
+          {lead.owner_email && (
+            <a
+              href={`mailto:${lead.owner_email}`}
+              className="flex items-center gap-1.5 text-xs font-medium bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full px-3 py-1"
+            >
+              <Mail className="h-3 w-3" /> Email
+            </a>
+          )}
         </div>
 
         {/* Score bar */}
@@ -138,6 +201,36 @@ export default function InRangeLeadDetail() {
 
       {/* Tab content */}
       <div className="px-4 py-4 space-y-4">
+
+        {/* ── Notes ── */}
+        {tab === 'notes' && (
+          <div className="space-y-3">
+            <Card>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Contact Notes</p>
+              <textarea
+                className="w-full text-sm text-gray-700 dark:text-gray-300 bg-transparent border border-gray-200 dark:border-gray-700 rounded-lg p-3 resize-none focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 min-h-[140px]"
+                placeholder="Add notes about this lead — conversations, offers, follow-up reminders…"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+              <button
+                onClick={() => saveNotes.mutate(notes)}
+                disabled={saveNotes.isPending}
+                className="mt-2 w-full py-2 text-sm font-medium rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 disabled:opacity-50"
+              >
+                {saveNotes.isPending ? 'Saving…' : notesSaved ? 'Saved ✓' : 'Save Notes'}
+              </button>
+            </Card>
+            {lead.last_contacted_at && (
+              <Card>
+                <p className="text-xs text-gray-400">Last contacted</p>
+                <p className="text-sm text-gray-900 dark:text-white mt-0.5">
+                  {new Date(lead.last_contacted_at).toLocaleString()}
+                </p>
+              </Card>
+            )}
+          </div>
+        )}
 
         {/* ── Outreach ── */}
         {tab === 'outreach' && (
