@@ -48,6 +48,8 @@ export const calculateDealQualityScore = (property: Record<string, unknown>): nu
   const TYPE_PTS: Record<string, number> = {
     sfr: 30, single_family: 30, multifamily: 25, duplex: 22,
     triplex: 22, fourplex: 22, condo: 18, townhouse: 20, land: 8,
+    // NJ class 4C — a 5+ unit apartment building, scored alongside multifamily
+    apartment: 25,
   };
 
   const type = ((property.property_type as string) || '').toLowerCase().replace(/[\s-]/g, '_');

@@ -90,7 +90,7 @@ const mapNJMODIV = (raw: Record<string, unknown>): Record<string, unknown> => {
     state:               "NJ",
     zip:                 raw.zip || raw.postal_code || "",
     county:              raw.county || "",
-    property_type:       NJ_CLASS_MAP[String(raw.property_class || raw.property_type || "")] || "unknown",
+    property_type:       njPropertyType(raw),
     distress_indicators: indicators,
     estimated_arv:       raw.estimated_arv  || null,
     assessed_value:      raw.assessed_value || null,
@@ -109,6 +109,16 @@ const mapNJMODIV = (raw: Record<string, unknown>): Record<string, unknown> => {
 const extractStateFromAddress = (addr: string): string => {
   const m = addr.match(/,?\s+([A-Z]{2})\s+\d{5}(-\d{4})?$/);
   return m ? m[1] : "";
+};
+
+// ingest-nj already translates PROP_CLASS into a canonical type, so running
+// that value through NJ_CLASS_MAP again yields undefined. Only translate when
+// we were actually handed a raw NJ class code (e.g. "4C"); otherwise pass the
+// already-mapped type straight through.
+const njPropertyType = (raw: Record<string, unknown>): string => {
+  const cls  = String(raw.property_class || "").trim();
+  const type = String(raw.property_type  || "").trim();
+  return NJ_CLASS_MAP[cls] || NJ_CLASS_MAP[type] || type || "unknown";
 };
 
 // Add new source mappers here as new Make.com data sources come online
