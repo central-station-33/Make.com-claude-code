@@ -212,7 +212,7 @@ Deno.serve(async (req) => {
           process_stage:           normalized.process_stage,
           case_number:             normalized.case_number,
           ...scores,
-          enrichment_status,
+          enrichment_status: enrichmentStatus,
           data_sources: [String(normalized.source)],
         },
         { onConflict: "property_hash" }
