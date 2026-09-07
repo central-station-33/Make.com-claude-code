@@ -4,16 +4,21 @@ import { ok, err, handleOptions } from "../_shared/cors.ts";
 const MAKE_SECRET = Deno.env.get("MAKE_WEBHOOK_SECRET") ?? "";
 
 // Deliberately excludes "apartment" (PLUTO/unitsToPropertyType's bucket for
-// 5+ unit buildings). Sorting by total building value surfaces institutional
-// owners of huge multi-unit complexes there, not individual homeowners --
-// this segment is scoped to genuinely residential 1-4 unit properties.
-// "coop" and "mixed_use" aren't included either -- neither PLUTO nor NJ
-// MOD-IV mapping produces those values today (co-ops share building classes
-// with rental apartments; mixed-use has no dedicated code path yet), so
-// filtering on them would silently return nothing rather than what the
-// caller expects.
+// 5+ unit RENTAL buildings). Sorting by total building value surfaces
+// institutional owners of huge multi-unit complexes there, not individual
+// homeowners -- this segment is scoped to genuinely residential ownership.
+//
+// "coop" IS included even though a co-op is legally a multi-unit building --
+// unlike a rental building, a co-op's ownername is the tenants' corporation,
+// and outreach targets individual shareholder-residents through it, not an
+// institutional landlord. See ingest-nyc's unitsToPropertyType for how "coop"
+// (bldgclass D4) is distinguished from ordinary rental "apartment" buildings.
+//
+// "mixed_use" isn't included -- no ingest path produces that value today (no
+// dedicated code path classifies it), so filtering on it would silently
+// return nothing rather than what the caller expects.
 const QUALIFYING_TYPES = [
-  "single_family", "multifamily", "duplex", "triplex", "fourplex", "condo",
+  "single_family", "multifamily", "duplex", "triplex", "fourplex", "condo", "coop",
 ];
 
 // Read-side counterpart to ingest-nyc/process-raw-properties: properties

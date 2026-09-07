@@ -31,8 +31,18 @@ const toBBL = (boroid: unknown, block: unknown, lot: unknown): string => {
 
 // PLUTO reports residential unit counts; map them onto the property types the
 // scoring engine recognises. NYC violation records carry no type of their own.
+//
+// "D4" = elevator apartment co-op in NYC DOF's building classification --
+// verified empirically against two undisputed NYC co-ops (The Majestic at
+// 115 CPW and San Remo at 145 CPW, owner "SAN REMO TENANTS CORP" -- the
+// classic co-op legal-entity naming pattern), both bldgclass D4. Checked
+// before the unitsRes bucketing below, since a co-op tower would otherwise
+// fall into the generic 5+-unit "apartment" bucket alongside rental
+// buildings, which is exactly the institutional-owner noise this
+// distinction exists to avoid.
 const unitsToPropertyType = (unitsRes: number, bldgClass: string): string => {
   const cls = bldgClass.trim().toUpperCase();
+  if (cls === "D4") return "coop";
   if (cls.startsWith("R")) return "condo";
   if (unitsRes === 1) return "single_family";
   if (unitsRes === 2) return "duplex";
