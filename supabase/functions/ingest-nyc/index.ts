@@ -11,6 +11,219 @@ const NYC_EVICTIONS = "https://data.cityofnewyork.us/resource/6z8x-wfk4.json";
 // mailing addresses. Joins to violations on `registrationid`.
 const HPD_CONTACTS = "https://data.cityofnewyork.us/resource/feu5-w2e2.json";
 
+// Parcel-level enrichment, all keyed by BBL. PLUTO supplies building
+// characteristics, DOF supplies a market valuation, and ACRIS supplies
+// recorded mortgage debt — the three inputs deal-quality scoring needs and
+// that the violation feed alone cannot provide.
+const PLUTO        = "https://data.cityofnewyork.us/resource/64uk-42ks.json";
+const DOF_VALUATION = "https://data.cityofnewyork.us/resource/yjxr-fw8i.json";
+const ACRIS_LEGALS = "https://data.cityofnewyork.us/resource/8h5j-fqxa.json";
+const ACRIS_MASTER = "https://data.cityofnewyork.us/resource/bnx9-e6tj.json";
+
+// BBL = borough(1) + block(5, zero-padded) + lot(4, zero-padded)
+const toBBL = (boroid: unknown, block: unknown, lot: unknown): string => {
+  const b = String(boroid || "").trim();
+  const bl = String(block || "").trim();
+  const lt = String(lot || "").trim();
+  if (!b || !bl || !lt) return "";
+  return `${b}${bl.padStart(5, "0")}${lt.padStart(4, "0")}`;
+};
+
+// PLUTO reports residential unit counts; map them onto the property types the
+// scoring engine recognises. NYC violation records carry no type of their own.
+const unitsToPropertyType = (unitsRes: number, bldgClass: string): string => {
+  const cls = bldgClass.trim().toUpperCase();
+  if (cls.startsWith("R")) return "condo";
+  if (unitsRes === 1) return "single_family";
+  if (unitsRes === 2) return "duplex";
+  if (unitsRes === 3) return "triplex";
+  if (unitsRes === 4) return "fourplex";
+  if (unitsRes >= 5)  return "apartment";
+  return "unknown";
+};
+
+type Parcel = {
+  property_type?: string;
+  year_built?: number | null;
+  square_footage?: number | null;
+  units_res?: number | null;
+  assessed_value?: number | null;
+  estimated_arv?: number | null;
+  amount_owed?: number | null;
+};
+
+// Socrata treats a numeric column and a text column differently in a SoQL
+// literal list, and BBL is typed inconsistently across these datasets. Try
+// unquoted first, fall back to quoted, and surface the failure rather than
+// silently returning nothing.
+const soqlIn = async (
+  base: string,
+  field: string,
+  values: string[],
+  label: string,
+  diagnostics: Record<string, unknown>,
+): Promise<Record<string, unknown>[]> => {
+  for (const quoted of [false, true]) {
+    const list = values.map((v) => (quoted ? `'${v}'` : v)).join(",");
+    const url = `${base}?${new URLSearchParams({
+      "$where": `${field} in (${list})`,
+      "$limit": "2000",
+    })}`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(25000) });
+      if (res.ok) {
+        diagnostics[`${label}_quoted`] = quoted;
+        return await res.json() as Record<string, unknown>[];
+      }
+      const body = await res.text().catch(() => "");
+      diagnostics[`${label}_error_${quoted ? "quoted" : "numeric"}`] =
+        `HTTP ${res.status}: ${body.slice(0, 200)}`;
+    } catch (e) {
+      diagnostics[`${label}_exception`] = String(e);
+      return [];
+    }
+  }
+  return [];
+};
+
+const num = (v: unknown): number | null => {
+  const n = Number(v);
+  return Number.isFinite(n) && n !== 0 ? n : null;
+};
+
+// One unfiltered record per dataset, recorded so a column rename upstream is
+// visible in the run output instead of silently zeroing out enrichment.
+const probeSchema = async (
+  label: string,
+  base: string,
+  diagnostics: Record<string, unknown>,
+): Promise<void> => {
+  try {
+    const res = await fetch(`${base}?$limit=1`, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) {
+      diagnostics[`${label}_schema_error`] = `HTTP ${res.status}`;
+      return;
+    }
+    const rows = await res.json() as Record<string, unknown>[];
+    diagnostics[`${label}_fields`] = rows[0] ? Object.keys(rows[0]) : [];
+  } catch (e) {
+    diagnostics[`${label}_schema_exception`] = String(e);
+  }
+};
+
+const fetchParcelData = async (
+  bbls: Set<string>,
+  diagnostics: Record<string, unknown>,
+  errors: string[],
+): Promise<Map<string, Parcel>> => {
+  const parcels = new Map<string, Parcel>();
+  const ids = [...bbls].filter(Boolean);
+  if (!ids.length) return parcels;
+
+  const upsert = (bbl: string, patch: Parcel) => {
+    parcels.set(bbl, { ...(parcels.get(bbl) ?? {}), ...patch });
+  };
+
+  const CHUNK = 100;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+
+    // --- PLUTO: building characteristics ---
+    try {
+      for (const row of await soqlIn(PLUTO, "bbl", chunk, "pluto", diagnostics)) {
+        const bbl = String(row.bbl || "").split(".")[0];
+        if (!bbl) continue;
+        const unitsRes = Number(row.unitsres || 0);
+        upsert(bbl, {
+          property_type:  unitsToPropertyType(unitsRes, String(row.bldgclass || "")),
+          units_res:      unitsRes || null,
+          year_built:     num(row.yearbuilt),
+          square_footage: num(row.bldgarea),
+          assessed_value: num(row.assesstot),
+        });
+      }
+    } catch (e) { errors.push(`PLUTO @${i}: ${String(e)}`); }
+
+    // --- DOF: full market valuation (a real DOF estimate, not assessed value) ---
+    try {
+      for (const row of await soqlIn(DOF_VALUATION, "bble", chunk, "dof", diagnostics)) {
+        const bbl = String(row.bble || row.bbl || "").split(".")[0];
+        if (!bbl) continue;
+        upsert(bbl, { estimated_arv: num(row.fullval) });
+      }
+    } catch (e) { errors.push(`DOF @${i}: ${String(e)}`); }
+  }
+
+  return parcels;
+};
+
+// ACRIS is a two-hop join: legals maps BBL to document ids, master carries the
+// document type and amount. Only recorded mortgages count toward debt.
+const fetchMortgages = async (
+  lots: { bbl: string; boroid: string; block: string; lot: string }[],
+  diagnostics: Record<string, unknown>,
+  errors: string[],
+): Promise<Map<string, number>> => {
+  const debt = new Map<string, number>();
+  if (!lots.length) return debt;
+
+  const CHUNK = 40;
+  for (let i = 0; i < lots.length; i += CHUNK) {
+    const chunk = lots.slice(i, i + CHUNK);
+    try {
+      const clauses = chunk
+        .map((l) => `(borough=${l.boroid} AND block=${l.block} AND lot=${l.lot})`)
+        .join(" OR ");
+
+      const legalsRes = await fetch(`${ACRIS_LEGALS}?${new URLSearchParams({
+        "$where": clauses,
+        "$limit": "2000",
+      })}`, { signal: AbortSignal.timeout(25000) });
+
+      if (!legalsRes.ok) {
+        diagnostics.acris_legals_error = `HTTP ${legalsRes.status}: ${(await legalsRes.text().catch(() => "")).slice(0, 200)}`;
+        continue;
+      }
+
+      const legals = await legalsRes.json() as Record<string, unknown>[];
+      const docToBBL = new Map<string, string>();
+      for (const l of legals) {
+        const bbl = toBBL(l.borough, l.block, l.lot);
+        const doc = String(l.document_id || "").trim();
+        if (bbl && doc) docToBBL.set(doc, bbl);
+      }
+      if (!docToBBL.size) continue;
+
+      const docIds = [...docToBBL.keys()].slice(0, 500);
+      const masterRes = await fetch(`${ACRIS_MASTER}?${new URLSearchParams({
+        "$where": `document_id in (${docIds.map((d) => `'${d}'`).join(",")}) AND doc_type='MTGE'`,
+        "$limit": "2000",
+      })}`, { signal: AbortSignal.timeout(25000) });
+
+      if (!masterRes.ok) {
+        diagnostics.acris_master_error = `HTTP ${masterRes.status}: ${(await masterRes.text().catch(() => "")).slice(0, 200)}`;
+        continue;
+      }
+
+      // Most recent recorded mortgage per lot is the best available debt figure
+      const newest = new Map<string, { amt: number; when: string }>();
+      for (const m of await masterRes.json() as Record<string, unknown>[]) {
+        const bbl = docToBBL.get(String(m.document_id || "").trim());
+        const amt = Number(m.document_amt || 0);
+        if (!bbl || !(amt > 0)) continue;
+        const when = String(m.recorded_datetime || m.document_date || "");
+        const cur = newest.get(bbl);
+        if (!cur || when > cur.when) newest.set(bbl, { amt, when });
+      }
+      for (const [bbl, v] of newest) debt.set(bbl, v.amt);
+    } catch (e) {
+      errors.push(`ACRIS @${i}: ${String(e)}`);
+    }
+  }
+
+  return debt;
+};
+
 // Which contact on a registration best represents the owner. A registration
 // carries several rows (owner, officer, managing agent); lowest rank wins.
 const CONTACT_RANK: Record<string, number> = {
@@ -39,7 +252,7 @@ const fetchHPDViolations = async (
       violationstatus: "Open",     // values are "Open" / "Close"
       "$order": "inspectiondate DESC",
       "$limit": String(limit),
-      "$select": "violationid,registrationid,housenumber,streetname,zip,boro,block,lot,novdescription,inspectiondate,currentstatus",
+      "$select": "violationid,registrationid,housenumber,streetname,zip,boro,boroid,block,lot,novdescription,inspectiondate,currentstatus",
     });
 
     const res = await fetch(`${HPD_VIOLATIONS}?${params}`, {
@@ -186,7 +399,11 @@ const fetchOwners = async (
   return owners;
 };
 
-const hpdToRaw = (v: Record<string, unknown>, owner?: Owner): Record<string, unknown> | null => {
+const hpdToRaw = (
+  v: Record<string, unknown>,
+  owner?: Owner,
+  parcel?: Parcel,
+): Record<string, unknown> | null => {
   const house  = String(v.housenumber || "").trim();
   const street = String(v.streetname  || "").trim();
   if (!house || !street) return null;
@@ -201,7 +418,15 @@ const hpdToRaw = (v: Record<string, unknown>, owner?: Owner): Record<string, unk
     city:           String(v.boro || "NEW YORK").trim(),
     state:          "NY",
     zip:            String(v.zip || "").trim(),
-    property_type:  "unknown",
+    bbl:            toBBL(v.boroid, v.block, v.lot),
+    // Parcel data comes from the PLUTO / DOF / ACRIS joins; the violation feed
+    // itself carries none of it
+    property_type:  parcel?.property_type  || "unknown",
+    year_built:     parcel?.year_built     ?? null,
+    square_footage: parcel?.square_footage ?? null,
+    assessed_value: parcel?.assessed_value ?? null,
+    estimated_arv:  parcel?.estimated_arv  ?? null,
+    amount_owed:    parcel?.amount_owed    ?? null,
     distress_indicators: indicators,
     process_stage:  "code violation",
     // Owner comes from the HPD registration contacts join, not the violation
@@ -282,7 +507,9 @@ Deno.serve(async (req) => {
 
     const results = {
       fetched: 0, inserted: 0, duplicates: 0, owners_resolved: 0,
+      parcels_resolved: 0, mortgages_resolved: 0,
       by_source: { hpd: 0, evictions: 0 } as Record<string, number>,
+      diagnostics: {} as Record<string, unknown>,
       errors: [] as string[],
     };
 
@@ -305,10 +532,43 @@ Deno.serve(async (req) => {
     const owners = await fetchOwners(regIds, results.errors);
     results.owners_resolved = owners.size;
 
+    // Pass 3: parcel data, resolved once per BBL rather than per violation
+    const diagnostics: Record<string, unknown> = {};
+    await Promise.all([
+      probeSchema("pluto",  PLUTO,        diagnostics),
+      probeSchema("dof",    DOF_VALUATION, diagnostics),
+      probeSchema("legals", ACRIS_LEGALS, diagnostics),
+      probeSchema("master", ACRIS_MASTER, diagnostics),
+    ]);
+
+    const lots = new Map<string, { bbl: string; boroid: string; block: string; lot: string }>();
+    for (const v of violations) {
+      const bbl = toBBL(v.boroid, v.block, v.lot);
+      if (bbl && !lots.has(bbl)) {
+        lots.set(bbl, {
+          bbl,
+          boroid: String(v.boroid).trim(),
+          block:  String(v.block).trim(),
+          lot:    String(v.lot).trim(),
+        });
+      }
+    }
+
+    const parcels = await fetchParcelData(new Set(lots.keys()), diagnostics, results.errors);
+    const debt    = await fetchMortgages([...lots.values()], diagnostics, results.errors);
+    for (const [bbl, amt] of debt) {
+      parcels.set(bbl, { ...(parcels.get(bbl) ?? {}), amount_owed: amt });
+    }
+
+    results.parcels_resolved   = parcels.size;
+    results.mortgages_resolved = debt.size;
+    results.diagnostics        = diagnostics;
+
     for (const v of violations) {
       results.fetched++;
       const owner   = owners.get(String(v.registrationid || "").trim());
-      const rawData = hpdToRaw(v, owner);
+      const parcel  = parcels.get(toBBL(v.boroid, v.block, v.lot));
+      const rawData = hpdToRaw(v, owner, parcel);
       if (!rawData) continue;
 
       const hash = await hashRecord("nyc_hpd", String(rawData.address), String(rawData.zip || ""));

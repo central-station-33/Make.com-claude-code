@@ -44,12 +44,19 @@ const mapNYC311 = (raw: Record<string, unknown>): Record<string, unknown> => {
     city:                raw.city || raw.borough || "NEW YORK",
     state:               "NY",
     zip:                 raw.zip || raw.incident_zip || "",
-    property_type:       raw.building_type || "unknown",
+    // ingest-nyc resolves property_type from the PLUTO join; building_type is
+    // the older 311-shaped field name and stays as a fallback
+    property_type:       raw.property_type || raw.building_type || "unknown",
     distress_indicators: [...indicators],
     notice_date:         raw.created_date || raw.notice_date || null,
     process_stage:       String(raw.process_stage || "code violation"),
+    // Parcel enrichment: PLUTO characteristics, DOF valuation, ACRIS debt.
+    // Without amount_owed alongside estimated_arv, equity cannot be computed.
     estimated_arv:       raw.estimated_arv   || null,
     assessed_value:      raw.assessed_value  || null,
+    amount_owed:         raw.amount_owed     || null,
+    year_built:          raw.year_built      || null,
+    square_footage:      raw.square_footage  || null,
     owner_name:          raw.owner_name      || "",
     owner_phone:         raw.owner_phone     || "",
     owner_email:         raw.owner_email     || "",
