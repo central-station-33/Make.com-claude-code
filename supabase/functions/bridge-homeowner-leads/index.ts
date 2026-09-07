@@ -44,6 +44,7 @@ Deno.serve(async (req) => {
       )
       .in("property_type", QUALIFYING_TYPES)
       .not("owner_name", "is", null)
+      .neq("owner_name", "")
       .or(`estimated_arv.gte.${minValue},assessed_value.gte.${minValue}`)
       .order("assessed_value", { ascending: false, nullsFirst: false })
       .limit(limit);
