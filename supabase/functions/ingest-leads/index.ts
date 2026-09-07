@@ -83,6 +83,21 @@ serve(async (req) => {
     }
   }
 
+  // Make discards the response body, so persist a diagnostic snapshot -- this
+  // is the only way to see per-lead errors outside the HTTP response itself.
+  try {
+    await supabase.from('raw_properties').upsert({
+      property_hash: `diagnostic_ingest_leads_${segment}`,
+      source: 'diagnostic',
+      raw_data: {
+        ran_at: new Date().toISOString(),
+        segment, market,
+        fetched: leads.length, upserted, errors,
+      },
+      processed_at: new Date().toISOString(),
+    }, { onConflict: 'property_hash' });
+  } catch { /* diagnostics must never break the real response */ }
+
   return json({ success: true, data: { fetched: leads.length, upserted, errors } });
 });
 
