@@ -3,14 +3,17 @@ import { ok, err, handleOptions } from "../_shared/cors.ts";
 
 const MAKE_SECRET = Deno.env.get("MAKE_WEBHOOK_SECRET") ?? "";
 
-// Property types the ingest pipeline can currently distinguish. "coop" and
-// "mixed_use" aren't included -- neither PLUTO nor NJ MOD-IV mapping produces
-// those values today (co-ops share building classes with rental apartments;
-// mixed-use has no dedicated code path yet), so filtering on them would
-// silently return nothing rather than what the caller expects.
+// Deliberately excludes "apartment" (PLUTO/unitsToPropertyType's bucket for
+// 5+ unit buildings). Sorting by total building value surfaces institutional
+// owners of huge multi-unit complexes there, not individual homeowners --
+// this segment is scoped to genuinely residential 1-4 unit properties.
+// "coop" and "mixed_use" aren't included either -- neither PLUTO nor NJ
+// MOD-IV mapping produces those values today (co-ops share building classes
+// with rental apartments; mixed-use has no dedicated code path yet), so
+// filtering on them would silently return nothing rather than what the
+// caller expects.
 const QUALIFYING_TYPES = [
-  "single_family", "multifamily", "duplex", "triplex", "fourplex",
-  "apartment", "condo",
+  "single_family", "multifamily", "duplex", "triplex", "fourplex", "condo",
 ];
 
 // Read-side counterpart to ingest-nyc/process-raw-properties: properties
