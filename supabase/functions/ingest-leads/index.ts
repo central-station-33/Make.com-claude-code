@@ -55,7 +55,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (existing) {
-        await supabase.from('isa_leads').update({
+        const { error: updateError } = await supabase.from('isa_leads').update({
           motivation_signals: normalized.motivation_signals ?? [],
           raw_data: normalized.raw_data ?? {},
           source_url: normalized.source_url,
@@ -66,8 +66,9 @@ serve(async (req) => {
           ...(normalized.rep_email && { rep_email: normalized.rep_email }),
           updated_at: new Date().toISOString(),
         }).eq('id', existing.id);
+        if (updateError) throw new Error(updateError.message);
       } else {
-        await supabase.from('isa_leads').insert({
+        const { error: insertError } = await supabase.from('isa_leads').insert({
           segment, market, commission_source,
           routing: normalized.routing ?? 'new',
           outreach_status: 'new',
@@ -76,6 +77,7 @@ serve(async (req) => {
           raw_data: normalized.raw_data ?? {},
           ...normalized,
         });
+        if (insertError) throw new Error(insertError.message);
       }
       upserted++;
     } catch (err) {
