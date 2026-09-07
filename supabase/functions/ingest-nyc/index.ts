@@ -7,6 +7,20 @@ const HPD_VIOLATIONS = "https://data.cityofnewyork.us/resource/wvxf-dwi5.json";
 // NYC Evictions (executed eviction filings — strong distress signal)
 const NYC_EVICTIONS = "https://data.cityofnewyork.us/resource/6z8x-wfk4.json";
 
+// HPD Registration Contacts — the only free source of NYC owner names and
+// mailing addresses. Joins to violations on `registrationid`.
+const HPD_CONTACTS = "https://data.cityofnewyork.us/resource/feu5-w2e2.json";
+
+// Which contact on a registration best represents the owner. A registration
+// carries several rows (owner, officer, managing agent); lowest rank wins.
+const CONTACT_RANK: Record<string, number> = {
+  IndividualOwner: 1,
+  CorporateOwner:  2,
+  HeadOfficer:     3,
+  Officer:         4,
+  Agent:           5,
+};
+
 type Borough = "MANHATTAN" | "BROOKLYN" | "QUEENS" | "BRONX" | "STATEN ISLAND";
 
 const BOROUGHS: Borough[] = ["BRONX", "BROOKLYN", "MANHATTAN", "QUEENS", "STATEN ISLAND"];
@@ -25,7 +39,7 @@ const fetchHPDViolations = async (
       violationstatus: "Open",     // values are "Open" / "Close"
       "$order": "inspectiondate DESC",
       "$limit": String(limit),
-      "$select": "violationid,housenumber,streetname,zip,boro,block,lot,novdescription,inspectiondate,currentstatus",
+      "$select": "violationid,registrationid,housenumber,streetname,zip,boro,block,lot,novdescription,inspectiondate,currentstatus",
     });
 
     const res = await fetch(`${HPD_VIOLATIONS}?${params}`, {
@@ -73,10 +87,113 @@ const fetchEvictions = async (
   }
 };
 
-const hpdToRaw = (v: Record<string, unknown>): Record<string, unknown> | null => {
+const LLC_RE = /\b(LLC|L\.L\.C|INC|CORP|LP|LTD|TRUST|ESTATE|HOLDING|REALTY|GROUP|PARTNER|ASSOC|MANAGEMENT|MGMT)\b/i;
+
+type Owner = {
+  name: string;
+  mailing: string;
+  type: string;
+  state: string;
+};
+
+// Socrata omits null fields per record, so a corporate contact simply has no
+// firstname/lastname and an individual has no corporationname. Read both.
+const contactToOwner = (c: Record<string, unknown>): Owner => {
+  const corp   = String(c.corporationname || "").trim();
+  const person = [c.firstname, c.lastname]
+    .map((x) => String(x || "").trim())
+    .filter(Boolean)
+    .join(" ");
+
+  const name  = person || corp;
+  const state = String(c.businessstate || "").trim().toUpperCase();
+
+  const street = [c.businesshousenumber, c.businessstreetname]
+    .map((x) => String(x || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  const apt = String(c.businessapartment || "").trim();
+
+  const mailing = [
+    street,
+    apt ? `APT ${apt}` : "",
+    String(c.businesscity || "").trim(),
+    state,
+    String(c.businesszip || "").trim(),
+  ].filter(Boolean).join(", ");
+
+  let type = "unknown";
+  if (person && !corp)   type = "individual";
+  else if (LLC_RE.test(corp)) type = "llc";
+  else if (corp)         type = "corporation";
+
+  return { name, mailing, type, state };
+};
+
+// Look up owners for the registrations we actually saw. Chunked because the
+// id list goes into the query string; no $select, so a column-name change
+// upstream can never 400 this request.
+const fetchOwners = async (
+  registrationIds: Set<string>,
+  errors: string[],
+): Promise<Map<string, Owner>> => {
+  const owners = new Map<string, Owner>();
+  const best   = new Map<string, number>();
+  const ids    = [...registrationIds].filter(Boolean);
+  const CHUNK  = 100;
+
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    // Ids come from the API and are numeric strings; strip quotes defensively
+    // since they are interpolated into a SoQL literal list.
+    const list = ids.slice(i, i + CHUNK)
+      .map((id) => `'${id.replace(/[^0-9]/g, "")}'`)
+      .join(",");
+
+    try {
+      const params = new URLSearchParams({
+        "$where": `registrationid in (${list})`,
+        "$limit": "2000",
+      });
+
+      const res = await fetch(`${HPD_CONTACTS}?${params}`, {
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`Contacts HTTP ${res.status}: ${body.slice(0, 200)}`);
+      }
+
+      for (const c of await res.json() as Record<string, unknown>[]) {
+        const reg = String(c.registrationid || "").trim();
+        if (!reg) continue;
+
+        const rank = CONTACT_RANK[String(c.type || "")] ?? 99;
+        if (rank >= (best.get(reg) ?? 99)) continue;
+
+        const owner = contactToOwner(c);
+        if (!owner.name) continue;
+
+        best.set(reg, rank);
+        owners.set(reg, owner);
+      }
+    } catch (e) {
+      const msg = `Owner contacts fetch failed @${i}: ${String(e)}`;
+      console.error(msg);
+      errors.push(msg);
+    }
+  }
+
+  return owners;
+};
+
+const hpdToRaw = (v: Record<string, unknown>, owner?: Owner): Record<string, unknown> | null => {
   const house  = String(v.housenumber || "").trim();
   const street = String(v.streetname  || "").trim();
   if (!house || !street) return null;
+
+  const indicators = ["code_violation"];
+  // An owner registered at an out-of-state address is an absentee landlord
+  if (owner?.state && owner.state !== "NY") indicators.push("out_of_state_owner");
 
   return {
     source:         "nyc_hpd",
@@ -85,11 +202,14 @@ const hpdToRaw = (v: Record<string, unknown>): Record<string, unknown> | null =>
     state:          "NY",
     zip:            String(v.zip || "").trim(),
     property_type:  "unknown",
-    distress_indicators: ["code_violation"],
+    distress_indicators: indicators,
     process_stage:  "code violation",
-    // HPD violations carry no owner name — left for skip-trace enrichment
-    owner_name:     "",
-    owner_type:     "unknown",
+    // Owner comes from the HPD registration contacts join, not the violation
+    owner_name:            owner?.name    || "",
+    owner_mailing_address: owner?.mailing || "",
+    owner_type:            owner?.type    || "unknown",
+    owner_state:           owner?.state   || "",
+    out_of_state_owner:    Boolean(owner?.state && owner.state !== "NY"),
     notice_date:    v.inspectiondate || null,
     case_number:    String(v.violationid || ""),
     violation_desc: String(v.novdescription || "").slice(0, 500),
@@ -161,7 +281,7 @@ Deno.serve(async (req) => {
     const evictionLimit = Math.min(Number(body.eviction_limit || 200), 500);
 
     const results = {
-      fetched: 0, inserted: 0, duplicates: 0,
+      fetched: 0, inserted: 0, duplicates: 0, owners_resolved: 0,
       by_source: { hpd: 0, evictions: 0 } as Record<string, number>,
       errors: [] as string[],
     };
@@ -172,19 +292,30 @@ Deno.serve(async (req) => {
     const hpdRows: { source: string; raw_data: Record<string, unknown>; property_hash: string }[] = [];
     const eviRows: typeof hpdRows = [];
 
+    // Pass 1: collect violations so we know which registrations to look up
+    const violations: Record<string, unknown>[] = [];
     for (const borough of BOROUGHS) {
-      const violations = await fetchHPDViolations(borough, perBorough, results.errors);
-      for (const v of violations) {
-        results.fetched++;
-        const rawData = hpdToRaw(v);
-        if (!rawData) continue;
+      violations.push(...await fetchHPDViolations(borough, perBorough, results.errors));
+    }
 
-        const hash = await hashRecord("nyc_hpd", String(rawData.address), String(rawData.zip || ""));
-        if (seen.has(hash)) { results.duplicates++; continue; }
-        seen.add(hash);
+    // Pass 2: resolve owners once per registration, not once per violation
+    const regIds = new Set(
+      violations.map((v) => String(v.registrationid || "").trim()).filter(Boolean)
+    );
+    const owners = await fetchOwners(regIds, results.errors);
+    results.owners_resolved = owners.size;
 
-        hpdRows.push({ source: "nyc_hpd", raw_data: rawData, property_hash: hash });
-      }
+    for (const v of violations) {
+      results.fetched++;
+      const owner   = owners.get(String(v.registrationid || "").trim());
+      const rawData = hpdToRaw(v, owner);
+      if (!rawData) continue;
+
+      const hash = await hashRecord("nyc_hpd", String(rawData.address), String(rawData.zip || ""));
+      if (seen.has(hash)) { results.duplicates++; continue; }
+      seen.add(hash);
+
+      hpdRows.push({ source: "nyc_hpd", raw_data: rawData, property_hash: hash });
     }
 
     const evictions = await fetchEvictions(evictionLimit, results.errors);

@@ -55,6 +55,10 @@ const mapNYC311 = (raw: Record<string, unknown>): Record<string, unknown> => {
     owner_email:         raw.owner_email     || "",
     owner_mailing_address: raw.owner_mailing_address || "",
     owner_type:          raw.owner_type      || "unknown",
+    // Set by ingest-nyc from the HPD registration contacts join; drives the
+    // out-of-state owner bonus in contact-likelihood scoring
+    owner_state:         raw.owner_state     || "",
+    case_number:         raw.case_number     || "",
   };
 };
 
