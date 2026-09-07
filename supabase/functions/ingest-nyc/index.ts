@@ -157,8 +157,17 @@ const fetchParcelData = async (
   return parcels;
 };
 
+// Longest common mortgage term; past this a recorded mortgage is assumed repaid
+const MORTGAGE_MAX_AGE_YEARS = 30;
+
 // ACRIS is a two-hop join: legals maps BBL to document ids, master carries the
 // document type and amount. Only recorded mortgages count toward debt.
+//
+// Caveat worth keeping in mind when reading amount_owed: this is the ORIGINAL
+// RECORDED PRINCIPAL, not a current balance. ACRIS records satisfactions as
+// separate documents that are not linked back here, so a repaid mortgage still
+// appears. Treat the figure as an upper bound on debt — it understates equity,
+// which is the safe direction for scoring, but it is not a payoff amount.
 const fetchMortgages = async (
   lots: { bbl: string; boroid: string; block: string; lot: string }[],
   diagnostics: Record<string, unknown>,
@@ -186,12 +195,28 @@ const fetchMortgages = async (
       }
 
       const legals = await legalsRes.json() as Record<string, unknown>[];
-      const docToBBL = new Map<string, string>();
+
+      // A document covering more than one lot is a blanket mortgage over a
+      // portfolio. Its face amount belongs to no single lot, so attributing it
+      // to each one inflates debt several-fold — drop those entirely.
+      const docLots = new Map<string, Set<string>>();
       for (const l of legals) {
         const bbl = toBBL(l.borough, l.block, l.lot);
         const doc = String(l.document_id || "").trim();
-        if (bbl && doc) docToBBL.set(doc, bbl);
+        if (!bbl || !doc) continue;
+        if (!docLots.has(doc)) docLots.set(doc, new Set());
+        docLots.get(doc)!.add(bbl);
       }
+
+      const docToBBL = new Map<string, string>();
+      let blanket = 0;
+      for (const [doc, bbls] of docLots) {
+        if (bbls.size > 1) { blanket++; continue; }
+        docToBBL.set(doc, [...bbls][0]);
+      }
+      diagnostics.acris_blanket_skipped =
+        Number(diagnostics.acris_blanket_skipped ?? 0) + blanket;
+
       if (!docToBBL.size) continue;
 
       const docIds = [...docToBBL.keys()].slice(0, 500);
@@ -205,16 +230,29 @@ const fetchMortgages = async (
         continue;
       }
 
-      // Most recent recorded mortgage per lot is the best available debt figure
+      // ACRIS never retires a mortgage record, so an old one is probably long
+      // repaid. Past a full 30-year term the figure is worse than no figure.
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - MORTGAGE_MAX_AGE_YEARS);
+      const cutoffISO = cutoff.toISOString();
+
+      // Most recent qualifying mortgage per lot is the best available figure
       const newest = new Map<string, { amt: number; when: string }>();
+      let stale = 0;
       for (const m of await masterRes.json() as Record<string, unknown>[]) {
         const bbl = docToBBL.get(String(m.document_id || "").trim());
         const amt = Number(m.document_amt || 0);
         if (!bbl || !(amt > 0)) continue;
+
         const when = String(m.recorded_datetime || m.document_date || "");
+        if (!when || when < cutoffISO) { stale++; continue; }
+
         const cur = newest.get(bbl);
         if (!cur || when > cur.when) newest.set(bbl, { amt, when });
       }
+      diagnostics.acris_stale_skipped =
+        Number(diagnostics.acris_stale_skipped ?? 0) + stale;
+
       for (const [bbl, v] of newest) debt.set(bbl, v.amt);
     } catch (e) {
       errors.push(`ACRIS @${i}: ${String(e)}`);
@@ -596,6 +634,15 @@ Deno.serve(async (req) => {
     results.inserted = results.by_source.hpd + results.by_source.evictions;
     // Rows already present from an earlier run are skipped by ON CONFLICT
     results.duplicates += (hpdRows.length + eviRows.length) - results.inserted;
+
+    // The Make caller discards the response body, so persist the run summary.
+    // Without this a failed parcel join is invisible outside the HTTP reply.
+    await supabase.from("raw_properties").upsert({
+      property_hash: "diagnostic_ingest_nyc",
+      source:        "diagnostic",
+      raw_data:      { ran_at: new Date().toISOString(), ...results },
+      processed_at:  new Date().toISOString(),
+    }, { onConflict: "property_hash" });
 
     return ok(
       results,
