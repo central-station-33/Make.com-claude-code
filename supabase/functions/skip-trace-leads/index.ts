@@ -24,12 +24,25 @@
  * would lock the lead out of every future run on the strength of a response
  * we failed to parse. Use dry_run to see what a call would buy, for free.
  *
+ * TWO-STEP APPROVAL GATE (required 2026-09-08 -- real money, small balance):
+ * no single request, regardless of its flags, can spend money. A call
+ * without confirm_token PROPOSES a batch: it resolves the exact records,
+ * charges nothing, and returns a one-time confirm_token good for 30 minutes
+ * and not usable for at least 2 minutes (so a scenario can't auto-chain
+ * propose->confirm in one breath -- a human is meant to review the proposal
+ * in between). Only a second call presenting that token actually spends,
+ * and only on the exact snapshot of records the proposal showed -- nothing
+ * is re-queried at confirm time, so the batch can't grow between the two
+ * calls. Never wire propose and confirm into the same Make scenario run;
+ * the human approval this exists for has to happen in between.
+ *
  * POST body: {
  *   table?: 'isa_leads'|'properties',   // default isa_leads
  *   segment?: string,                   // default: walk the priority tiers
  *   limit?: number,                     // default 5, max 100
  *   min_bant_score?: number,            // isa_leads only; 0 = no filter
- *   dry_run?: boolean,                  // resolve targets, call nothing, spend nothing
+ *   dry_run?: boolean,                  // resolve targets, call nothing, spend nothing, no token
+ *   confirm_token?: string,             // from a prior propose call; presence = "run it"
  * }
  */
 
@@ -49,6 +62,13 @@ const BATCHDATA_ENDPOINT  = 'https://api.batchdata.com/api/v1/property/skip-trac
 // per call once a run has been confirmed against the diagnostic.
 const MAX_BATCH     = 100;
 const DEFAULT_BATCH = 5;
+
+// How long a proposed batch stays confirmable, and the minimum gap before it
+// CAN be confirmed. The floor exists so a Make scenario can't propose and
+// confirm back-to-back in one run and call that "two steps" -- there has to
+// be a real gap for a human to actually look at the proposal in between.
+const CONFIRM_TTL_MS       = 30 * 60 * 1000;
+const MIN_CONFIRM_DELAY_MS = 2  * 60 * 1000;
 
 interface TraceRecord {
   id: string;
@@ -70,6 +90,41 @@ serve(async (req) => {
   }
 
   const body: Record<string, unknown> = await req.json().catch(() => ({}));
+  const supabase = getServiceClient();
+
+  // CONFIRM PATH — a confirm_token means "spend money now." Nothing here
+  // re-resolves which records to trace: it uses the exact snapshot the
+  // matching propose call showed, so the approved batch can't grow between
+  // the two calls, and no combination of body flags reaches this path
+  // without a token minted by an earlier, separate propose call.
+  if (typeof body.confirm_token === 'string' && body.confirm_token) {
+    const nowIso = new Date().toISOString();
+    const confirmableBefore = new Date(Date.now() - MIN_CONFIRM_DELAY_MS).toISOString();
+
+    const { data: confirmation, error: confirmError } = await supabase
+      .from('skip_trace_confirmations')
+      .update({ consumed_at: nowIso })
+      .eq('token', body.confirm_token)
+      .is('consumed_at', null)
+      .gt('expires_at', nowIso)
+      .lt('created_at', confirmableBefore)
+      .select()
+      .maybeSingle();
+
+    if (confirmError) return json({ success: false, error: confirmError.message }, 500);
+    if (!confirmation) {
+      return json({ success: false, error:
+        'confirm_token is invalid, expired, already used, or was issued less than ' +
+        '2 minutes ago. Call again without confirm_token to propose a fresh batch.',
+      }, 400);
+    }
+
+    const records = confirmation.record_ids as TraceRecord[];
+    return await runTrace(supabase, confirmation.table_name as string, confirmation.segment as string | null, records);
+  }
+
+  // PROPOSE PATH — resolves the batch and, unless dry_run, mints a token.
+  // Spends nothing either way.
   const table   = body.table === 'properties' ? 'properties' : 'isa_leads';
   // No segment named means "spend this budget in priority order" (homeowner,
   // then investor, then athlete/celebrity) rather than a fixed segment —
@@ -77,12 +132,7 @@ serve(async (req) => {
   const segment  = table === 'isa_leads' && body.segment ? String(body.segment) : null;
   const limit    = Math.min(Math.max(Number(body.limit) || DEFAULT_BATCH, 1), MAX_BATCH);
   const minScore = Math.max(Number(body.min_bant_score) || 0, 0);
-  // Costs nothing: resolves exactly which records *would* be bought and
-  // returns them without calling the vendor. Worth running before any batch
-  // while the balance is small.
   const dryRun   = body.dry_run === true;
-
-  const supabase = getServiceClient();
 
   const { records, error: fetchError } = table === 'properties'
     ? await fetchPropertyRecords(supabase, limit)
@@ -92,19 +142,41 @@ serve(async (req) => {
     await persistDiag(supabase, table, { stage: 'query_records', error: fetchError });
     return json({ success: false, error: fetchError }, 500);
   }
+
+  const preview = records.map((r) => ({ id: r.id, owner: r.ownerName, address: r.address }));
+
+  if (dryRun) {
+    return json({ success: true, data: { dry_run: true, would_trace: records.length, records: preview } });
+  }
   if (!records.length) {
     await persistDiag(supabase, table, { stage: 'no_records_to_trace', segment });
     return json({ success: true, data: { attempted: 0, matched: 0 } });
   }
 
-  if (dryRun) {
-    return json({ success: true, data: {
-      dry_run: true,
-      would_trace: records.length,
-      records: records.map((r) => ({ id: r.id, owner: r.ownerName, address: r.address })),
-    } });
-  }
+  const token = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + CONFIRM_TTL_MS).toISOString();
 
+  const { error: proposeError } = await supabase.from('skip_trace_confirmations').insert({
+    token, table_name: table, segment, record_ids: records, record_count: records.length, expires_at: expiresAt,
+  });
+  if (proposeError) return json({ success: false, error: proposeError.message }, 500);
+
+  return json({ success: true, data: {
+    confirmation_required: true,
+    confirm_token: token,
+    confirmable_after: new Date(Date.now() + MIN_CONFIRM_DELAY_MS).toISOString(),
+    expires_at: expiresAt,
+    would_trace: records.length,
+    records: preview,
+  } });
+});
+
+async function runTrace(
+  supabase: ReturnType<typeof getServiceClient>,
+  table: string,
+  segment: string | null,
+  records: TraceRecord[],
+): Promise<Response> {
   let rawResponse: unknown = null;
   let matched = 0;
   let noMatch = 0;
@@ -186,7 +258,7 @@ serve(async (req) => {
   return json({ success: true, data: {
     attempted: records.length, matched, no_match: noMatch, unresolved, errors,
   } });
-});
+}
 
 async function fetchIsaLeadRecords(
   supabase: ReturnType<typeof getServiceClient>,

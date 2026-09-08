@@ -64,6 +64,17 @@ required, not optional. Vendor: BatchData (`skip-trace-leads` edge function).
 This exception is scoped to phone/email contact resolution only; the "no
 paid data sources" rule still applies everywhere else.
 
+**Spend approval (set 2026-09-08, small account balance):** never trigger a
+real (non-dry-run) skip-trace run without the user's explicit approval given
+on two separate occasions. This is enforced in the function itself, not just
+by convention — `skip-trace-leads` requires two separate calls (see its
+header doc): a `propose` call that resolves the batch and spends nothing,
+then a later `confirm` call presenting the token that call returned, which
+is the only call that spends money. Never chain propose and confirm together
+in one Make scenario run or one script — the gap between them is where the
+user's second approval belongs. `dry_run: true` is free and requires no
+approval at all.
+
 ## Always Ask Before Building
 - Does this already exist in Make.com/JetAdmin/Supabase?
 - Can Supabase Edge Functions handle this instead of a separate server?
