@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { ok, err, handleOptions } from "../_shared/cors.ts";
 
-const NJOGIS = "https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/Parcels_and_MOD_IV_Composite/FeatureServer/0/query";
+const NJOGIS = "https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/Parcels_MODIV_NJ_WM/FeatureServer/0/query";
 
 // High-distress NJ municipalities
 const DEFAULT_TARGETS = [
@@ -18,40 +18,78 @@ const NJ_CLASS_MAP: Record<string, string> = {
   "15A": "single_family", "15B": "multifamily", "15C": "condo",
 };
 
-// Residential classes worth scanning
+// Residential PROP_CLASS values
 const RESIDENTIAL_CLASSES = "'2','4C','15A','15B','15C'";
 
 const LLC_RE = /\b(LLC|L\.L\.C|INC|CORP|LP|LTD|TRUST|ESTATE|HOLDING|PROP|ASSOC|PARTNER|REALTY|GROUP|CAPITAL)\b/i;
 
-const yearsOwnedFrom = (saleDate: unknown): number => {
-  if (!saleDate) return 0;
-  const d = new Date(String(saleDate));
-  if (isNaN(d.getTime())) return 0;
-  return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+// Strip NJ municipality type suffixes (e.g. "JERSEY CITY CITY" → "JERSEY CITY")
+const cleanMunName = (name: string): string =>
+  name.replace(/\s+(CITY|TWP|TOWNSHIP|BOROUGH|BORO|VILLAGE|TOWN)\s*$/i, "").trim();
+
+// DEED_DATE can be YYYYMM string, YYYYMMDD string, or epoch milliseconds number
+const yearsOwnedFrom = (deedDate: unknown): number => {
+  if (!deedDate) return 0;
+  const n = Number(deedDate);
+  // Epoch milliseconds: large positive number (> year 9999 in ms = ~253402300800000)
+  if (!isNaN(n) && n > 9_999_999_999) {
+    const d = new Date(n);
+    if (!isNaN(d.getTime())) {
+      return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    }
+  }
+  const s = String(deedDate).trim();
+  if (s.length >= 6 && /^\d+$/.test(s)) {
+    const year = parseInt(s.slice(0, 4), 10);
+    const month = parseInt(s.slice(4, 6), 10) - 1;
+    const day = s.length >= 8 ? parseInt(s.slice(6, 8), 10) : 1;
+    // Sanity check: year must be plausible
+    if (year >= 1800 && year <= new Date().getFullYear()) {
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) {
+        return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+      }
+    }
+  }
+  return 0;
 };
 
 const fetchMunicipality = async (
   munname: string,
-  perMuni: number
+  perMuni: number,
+  errors: string[]
 ): Promise<Record<string, unknown>[]> => {
   try {
     const params = new URLSearchParams({
-      where: `MUNNAME='${munname}' AND PROPCLASS IN (${RESIDENTIAL_CLASSES})`,
-      outFields: "PROPLOCN,MUNNAME,ZIPCODE,PROPCLASS,NETPRPTAX,ASSMNT,OWNERSNAME,ADDR1,ADDR2,OWNERSCITY,OWNERSSTATE,OWNERSZIP,SALEDATE,SALEPRICE",
-      orderByFields: "NETPRPTAX DESC",
+      where: `MUN_NAME LIKE '%${munname}%' AND PROP_CLASS IN (${RESIDENTIAL_CLASSES})`,
+      outFields: "PROP_LOC,MUN_NAME,ZIP_CODE,PROP_CLASS,LAST_YR_TX,NET_VALUE,OWNER_NAME,FAC_NAME,ST_ADDRESS,CITY_STATE,DEED_DATE,SALE_PRICE,COUNTY",
+      orderByFields: "LAST_YR_TX DESC",
       resultRecordCount: String(perMuni),
       f: "json",
     });
 
-    const res = await fetch(`${NJOGIS}?${params}`, {
+    const url = `${NJOGIS}?${params}`;
+    console.log(`Fetching NJOGIS: ${munname}`);
+
+    const res = await fetch(url, {
+      headers: { "User-Agent": "InRange/1.0" },
       signal: AbortSignal.timeout(25000),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+    }
 
-    const json = await res.json() as { features?: { attributes: Record<string, unknown> }[] };
-    return (json.features || []).map((f) => f.attributes);
+    const json = await res.json() as { features?: { attributes: Record<string, unknown> }[]; error?: { message: string } };
+    if (json.error) throw new Error(`ArcGIS error: ${json.error.message}`);
+
+    const features = json.features || [];
+    console.log(`NJOGIS ${munname}: ${features.length} features`);
+    return features.map((f) => f.attributes);
   } catch (e) {
-    console.error(`NJOGIS fetch failed for ${munname}:`, e);
+    const msg = `NJOGIS fetch failed for ${munname}: ${String(e)}`;
+    console.error(msg);
+    errors.push(msg);
     return [];
   }
 };
@@ -60,43 +98,82 @@ const toRawRecord = (
   attr: Record<string, unknown>,
   county: string
 ): Record<string, unknown> => {
-  const ownerName  = String(attr.OWNERSNAME || "").trim();
-  const ownerState = String(attr.OWNERSSTATE || "").toUpperCase().trim();
-  const years      = yearsOwnedFrom(attr.SALEDATE);
+  // Use OWNER_NAME; fall back to FAC_NAME for apartments/commercial with no owner name
+  const ownerName  = (String(attr.OWNER_NAME || "").trim() || String(attr.FAC_NAME || "").trim());
+  const cityState  = String(attr.CITY_STATE || "").trim();
+  // Extract state from "CITY, ST" format
+  const stateMatch = cityState.match(/,\s*([A-Z]{2})\s*$/);
+  const ownerState = stateMatch ? stateMatch[1] : "NJ";
+  const isOOState  = ownerState !== "NJ";
   const isLLC      = LLC_RE.test(ownerName);
-  const isOOState  = ownerState && ownerState !== "NJ";
+  const years      = yearsOwnedFrom(attr.DEED_DATE);
 
-  // Use field names that mapNJMODIV in process-raw-properties understands
   return {
     source:         "nj_mod_iv",
-    address:        String(attr.PROPLOCN || "").trim(),
-    city:           String(attr.MUNNAME  || "").trim(),
+    address:        String(attr.PROP_LOC || "").trim(),
+    city:           cleanMunName(String(attr.MUN_NAME || "").trim()),
     state:          "NJ",
-    zip:            String(attr.ZIPCODE  || "").trim(),
+    zip:            String(attr.ZIP_CODE  || "").trim(),
     county,
-    property_type:  NJ_CLASS_MAP[String(attr.PROPCLASS || "")] || "unknown",
-    assessed_value: Number(attr.ASSMNT   || 0) || null,
-    // No reliable ARV from MOD-IV — leave null, let AI enrichment estimate
+    property_type:  NJ_CLASS_MAP[String(attr.PROP_CLASS || "")] || "unknown",
+    assessed_value: Number(attr.NET_VALUE || 0) || null,
     estimated_arv:  null,
-    // Pass delinquent_amount=0 so mapNJMODIV doesn't skip indicators
     delinquent_amount: 0,
-    // years_owned is read by mapNJMODIV to set burnt_out_landlord indicator
     years_owned:    Math.round(years),
     owner_name:     ownerName,
     owner_mailing_address: [
-      String(attr.ADDR1 || ""),
-      String(attr.ADDR2 || ""),
-      String(attr.OWNERSCITY || ""),
-      String(attr.OWNERSSTATE || ""),
-      String(attr.OWNERSZIP || ""),
+      String(attr.ST_ADDRESS || ""),
+      cityState,
+      String(attr.ZIP_CODE || ""),
     ].filter(Boolean).join(", ").trim(),
     owner_type:     isLLC ? "llc" : "individual",
-    // Explicitly pass owner_state so normalization picks it up
-    owner_state:    ownerState || "NJ",
+    owner_state:    ownerState,
     process_stage:  "pre_foreclosure",
-    // Additional context for process-raw-properties mapper
     out_of_state_owner: isOOState,
   };
+};
+
+const testConnectivity = async (supabase: ReturnType<typeof createClient>): Promise<Record<string, unknown>> => {
+  const results: Record<string, unknown> = { ran_at: new Date().toISOString() };
+
+  try {
+    const r = await fetch("https://api.github.com/zen", {
+      headers: { "User-Agent": "InRange/1.0" },
+      signal: AbortSignal.timeout(10000),
+    });
+    results.github_status = r.status;
+    results.github_ok = r.ok;
+    results.github_body = await r.text();
+  } catch (e) {
+    results.github_error = String(e);
+  }
+
+  try {
+    const params = new URLSearchParams({ where: "1=1", outFields: "*", resultRecordCount: "1", f: "json" });
+    const r = await fetch(`${NJOGIS}?${params}`, {
+      headers: { "User-Agent": "InRange/1.0" },
+      signal: AbortSignal.timeout(15000),
+    });
+    results.njogis_status = r.status;
+    results.njogis_ok = r.ok;
+    const json = await r.json() as { features?: { attributes: Record<string, unknown> }[]; error?: unknown; fields?: { name: string }[] };
+    results.njogis_error_body = json.error || null;
+    results.njogis_feature_count = (json.features || []).length;
+    results.njogis_field_names = (json.fields || []).map((f: { name: string }) => f.name);
+    if (json.features && json.features[0]) {
+      results.njogis_sample = json.features[0].attributes;
+    }
+  } catch (e) {
+    results.njogis_error = String(e);
+  }
+
+  await supabase.from("raw_properties").upsert({
+    property_hash: "diagnostic_connectivity_test",
+    source: "diagnostic",
+    raw_data: results,
+  }, { onConflict: "property_hash" });
+
+  return results;
 };
 
 Deno.serve(async (req) => {
@@ -109,6 +186,12 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+
+    if (body.test === true) {
+      const diag = await testConnectivity(supabase);
+      return ok(diag, "Connectivity test");
+    }
+
     const perMuni   = Math.min(Number(body.per_municipality || 75), 200);
     const targets   = (body.municipalities as typeof DEFAULT_TARGETS) || DEFAULT_TARGETS;
 
@@ -119,11 +202,11 @@ Deno.serve(async (req) => {
     };
 
     for (const { munname, county } of targets) {
-      const attrs = await fetchMunicipality(munname, perMuni);
+      const attrs = await fetchMunicipality(munname, perMuni, results.errors);
       let muniCount = 0;
 
       for (const attr of attrs) {
-        if (!attr.PROPLOCN) continue;
+        if (!attr.PROP_LOC) continue;
 
         const rawData = toRawRecord(attr, county);
         const addr    = String(rawData.address || "").toUpperCase().trim();

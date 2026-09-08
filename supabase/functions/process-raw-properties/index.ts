@@ -44,17 +44,28 @@ const mapNYC311 = (raw: Record<string, unknown>): Record<string, unknown> => {
     city:                raw.city || raw.borough || "NEW YORK",
     state:               "NY",
     zip:                 raw.zip || raw.incident_zip || "",
-    property_type:       raw.building_type || "unknown",
+    // ingest-nyc resolves property_type from the PLUTO join; building_type is
+    // the older 311-shaped field name and stays as a fallback
+    property_type:       raw.property_type || raw.building_type || "unknown",
     distress_indicators: [...indicators],
     notice_date:         raw.created_date || raw.notice_date || null,
     process_stage:       String(raw.process_stage || "code violation"),
+    // Parcel enrichment: PLUTO characteristics, DOF valuation, ACRIS debt.
+    // Without amount_owed alongside estimated_arv, equity cannot be computed.
     estimated_arv:       raw.estimated_arv   || null,
     assessed_value:      raw.assessed_value  || null,
+    amount_owed:         raw.amount_owed     || null,
+    year_built:          raw.year_built      || null,
+    square_footage:      raw.square_footage  || null,
     owner_name:          raw.owner_name      || "",
     owner_phone:         raw.owner_phone     || "",
     owner_email:         raw.owner_email     || "",
     owner_mailing_address: raw.owner_mailing_address || "",
     owner_type:          raw.owner_type      || "unknown",
+    // Set by ingest-nyc from the HPD registration contacts join; drives the
+    // out-of-state owner bonus in contact-likelihood scoring
+    owner_state:         raw.owner_state     || "",
+    case_number:         raw.case_number     || "",
   };
 };
 
@@ -86,7 +97,7 @@ const mapNJMODIV = (raw: Record<string, unknown>): Record<string, unknown> => {
     state:               "NJ",
     zip:                 raw.zip || raw.postal_code || "",
     county:              raw.county || "",
-    property_type:       NJ_CLASS_MAP[String(raw.property_class || raw.property_type || "")] || "unknown",
+    property_type:       njPropertyType(raw),
     distress_indicators: indicators,
     estimated_arv:       raw.estimated_arv  || null,
     assessed_value:      raw.assessed_value || null,
@@ -105,6 +116,16 @@ const mapNJMODIV = (raw: Record<string, unknown>): Record<string, unknown> => {
 const extractStateFromAddress = (addr: string): string => {
   const m = addr.match(/,?\s+([A-Z]{2})\s+\d{5}(-\d{4})?$/);
   return m ? m[1] : "";
+};
+
+// ingest-nj already translates PROP_CLASS into a canonical type, so running
+// that value through NJ_CLASS_MAP again yields undefined. Only translate when
+// we were actually handed a raw NJ class code (e.g. "4C"); otherwise pass the
+// already-mapped type straight through.
+const njPropertyType = (raw: Record<string, unknown>): string => {
+  const cls  = String(raw.property_class || "").trim();
+  const type = String(raw.property_type  || "").trim();
+  return NJ_CLASS_MAP[cls] || NJ_CLASS_MAP[type] || type || "unknown";
 };
 
 // Add new source mappers here as new Make.com data sources come online
@@ -212,7 +233,7 @@ Deno.serve(async (req) => {
           process_stage:           normalized.process_stage,
           case_number:             normalized.case_number,
           ...scores,
-          enrichment_status,
+          enrichment_status: enrichmentStatus,
           data_sources: [String(normalized.source)],
         },
         { onConflict: "property_hash" }

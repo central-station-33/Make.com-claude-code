@@ -38,8 +38,16 @@ JetAdmin Dashboard (direct Supabase connection)
 
 ## Do NOT Suggest
 - Render.com, Railway, Fly.io or any separate hosting
-- Paid data sources (PropStream, BatchLeads, etc.)
+- Paid data sources (PropStream, BatchLeads, etc.) — **except** paid skip
+  tracing for owner phone/email, explicitly approved 2026-09-08 (see below)
 - Duplicate services that Supabase already provides
+
+## Approved Exception: Paid Skip Tracing
+Owner phone/email has no free bulk source (mailing address, yes; phone/email,
+no). Outreach is call/email/social only — no mail campaigns — so this is
+required, not optional. Vendor: BatchData (`skip-trace-leads` edge function).
+This exception is scoped to phone/email contact resolution only; the "no
+paid data sources" rule still applies everywhere else.
 
 ## Always Ask Before Building
 - Does this already exist in Make.com/JetAdmin/Supabase?
