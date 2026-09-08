@@ -22,11 +22,15 @@ const SignInForm = memo(() => {
     timeRemaining
   } = useAuthForm();
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [password, setPassword] = useState('');
   const [signupDone, setSignupDone] = useState(false);
   const [signupError, setSignupError] = useState('');
   const [signingUp, setSigningUp] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +38,21 @@ const SignInForm = memo(() => {
       await handleSignIn(email, password);
     }
   }, [email, handleSignIn, password]);
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetting(true);
+    setResetError('');
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    });
+    if (error) {
+      setResetError(error.message);
+    } else {
+      setResetSent(true);
+    }
+    setResetting(false);
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +66,43 @@ const SignInForm = memo(() => {
     }
     setSigningUp(false);
   };
+
+  if (mode === 'forgot') {
+    return (
+      <form onSubmit={handleForgotPassword} className="space-y-4">
+        {resetSent ? (
+          <Alert>
+            <AlertDescription>
+              If an account exists for that email, a password reset link has been sent. Check your inbox (and spam folder) — the link expires in 24 hours.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <>
+            {resetError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{resetError}</AlertDescription>
+              </Alert>
+            )}
+            <EmailField value={resetEmail} onChange={setResetEmail} isLoading={resetting} />
+            <Button type="submit" className="w-full" disabled={resetting || !resetEmail}>
+              {resetting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</> : 'Send Reset Link'}
+            </Button>
+          </>
+        )}
+        <div className="text-center">
+          <Button
+            type="button"
+            variant="link"
+            onClick={() => { setMode('signin'); setResetSent(false); setResetError(''); }}
+            className="text-gray-600 hover:text-gray-900"
+          >
+            Back to sign in
+          </Button>
+        </div>
+      </form>
+    );
+  }
 
   if (mode === 'signup') {
     return (
@@ -123,9 +179,12 @@ const SignInForm = memo(() => {
         <Button type="submit" className="w-full" disabled={isLoading || isRateLimited || !email || !password}>
           {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...</> : 'Sign In'}
         </Button>
-        <div className="text-center">
-          <Button type="button" variant="link" onClick={() => setMode('signup')} className="text-gray-600 hover:text-gray-900">
+        <div className="flex items-center justify-between">
+          <Button type="button" variant="link" onClick={() => setMode('signup')} className="text-gray-600 hover:text-gray-900 px-0">
             No account? Create one
+          </Button>
+          <Button type="button" variant="link" onClick={() => { setMode('forgot'); setResetEmail(email); }} className="text-gray-600 hover:text-gray-900 px-0">
+            Forgot password?
           </Button>
         </div>
       </div>
