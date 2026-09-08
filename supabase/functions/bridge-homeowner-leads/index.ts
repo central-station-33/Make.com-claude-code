@@ -21,6 +21,12 @@ const QUALIFYING_TYPES = [
   "single_family", "multifamily", "duplex", "triplex", "fourplex", "condo", "coop",
 ];
 
+// Named exclusions for owners that pass the type+value filter but are still
+// wrong for this segment -- e.g. "Roosevelt Island Associates" is bldgclass
+// D4 (a genuine co-op designation) but is a large-scale multi-building
+// housing complex, not a single building's shareholder-residents.
+const EXCLUDED_OWNERS = ["ROOSEVELT ISLAND ASSOCIATES"];
+
 // Read-side counterpart to ingest-nyc/process-raw-properties: properties
 // holds owner PII (name, phone, email), so RLS correctly blocks the anon key
 // from reading it directly over PostgREST. This function is the sanctioned
@@ -44,7 +50,7 @@ Deno.serve(async (req) => {
     const minValue = Math.max(Number(body.min_value) || 500_000, 0);
     const limit = Math.min(Number(body.limit) || 75, 200);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("properties")
       .select(
         "id,address,city,state,zip,county,owner_name,owner_phone,owner_email," +
@@ -56,6 +62,12 @@ Deno.serve(async (req) => {
       .or(`estimated_arv.gte.${minValue},assessed_value.gte.${minValue}`)
       .order("assessed_value", { ascending: false, nullsFirst: false })
       .limit(limit);
+
+    for (const owner of EXCLUDED_OWNERS) {
+      query = query.not("owner_name", "ilike", `%${owner}%`);
+    }
+
+    const { data, error } = await query;
 
     if (error) return err(error.message, 500);
 
