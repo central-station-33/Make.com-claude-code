@@ -3,6 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { ok, err, handleOptions } from '../_shared/cors.ts';
 import { normalizeProperty } from '../_shared/normalization.ts';
 
+const MAKE_SECRET = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
+
 const NYC_API = 'https://data.cityofnewyork.us/resource';
 const NJ_PARCELS_API = 'https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/Parcels_and_MOD_IV_Composite/FeatureServer/0/query';
 const FEMA_API = 'https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28/query';
@@ -70,6 +72,8 @@ const calcBurntOutScore = (signals: Record<string, unknown>) => {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return handleOptions();
+  if (!MAKE_SECRET) return err('Server misconfigured', 500);
+  if (req.headers.get('x-make-secret') !== MAKE_SECRET) return err('Unauthorized', 401);
 
   try {
     const supabase = createClient(

@@ -2,9 +2,13 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { ok, err, handleOptions } from '../_shared/cors.ts';
 
+const MAKE_SECRET = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
+
 // Called by Make.com Workflow 3 after sending notifications
 serve(async (req) => {
   if (req.method === 'OPTIONS') return handleOptions();
+  if (!MAKE_SECRET) return err('Server misconfigured', 500);
+  if (req.headers.get('x-make-secret') !== MAKE_SECRET) return err('Unauthorized', 401);
 
   try {
     const supabase = createClient(
