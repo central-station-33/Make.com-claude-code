@@ -22,6 +22,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { getServiceClient } from '../_shared/supabase-client.ts';
+import { segmentTiers, unrankedSegmentFilter } from '../_shared/segment-priority.ts';
 
 const MAKE_SECRET         = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
 const BATCHDATA_API_KEY   = Deno.env.get('BATCHDATA_API_KEY') ?? '';
@@ -53,14 +54,17 @@ serve(async (req) => {
 
   const body: Record<string, unknown> = await req.json().catch(() => ({}));
   const table   = body.table === 'properties' ? 'properties' : 'isa_leads';
-  const segment = table === 'isa_leads' ? String(body.segment ?? 'homeowner') : undefined;
+  // No segment named means "spend this budget in priority order" (homeowner,
+  // then investor, then athlete/celebrity) rather than a fixed segment —
+  // this is the per-hit-billed path, so what it spends on first matters.
+  const segment = table === 'isa_leads' && body.segment ? String(body.segment) : null;
   const limit   = Math.min(Math.max(Number(body.limit) || 25, 1), MAX_BATCH);
 
   const supabase = getServiceClient();
 
   const { records, error: fetchError } = table === 'properties'
     ? await fetchPropertyRecords(supabase, limit)
-    : await fetchIsaLeadRecords(supabase, segment!, limit);
+    : await fetchIsaLeadRecords(supabase, segment, limit);
 
   if (fetchError) {
     await persistDiag(supabase, table, { stage: 'query_records', error: fetchError });
@@ -141,24 +145,21 @@ serve(async (req) => {
 
 async function fetchIsaLeadRecords(
   supabase: ReturnType<typeof getServiceClient>,
-  segment: string,
+  segment: string | null,
   limit: number,
 ): Promise<{ records: TraceRecord[]; error: string | null }> {
-  const { data, error } = await supabase
+  const untraced = (max: number) => supabase
     .from('isa_leads')
     .select('id, full_name, entity_name, property_address')
-    .eq('segment', segment)
     .is('skip_trace_status', null)
     .is('phone', null)
     .is('email', null)
     .not('property_address', 'is', null)
     .neq('property_address', '')
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(max);
 
-  if (error) return { records: [], error: error.message };
-
-  const records = (data ?? [])
+  const toRecords = (rows: Record<string, unknown>[]) => rows
     .map((row) => ({
       id: row.id as string,
       ownerName: (row.full_name ?? row.entity_name ?? '') as string,
@@ -166,6 +167,26 @@ async function fetchIsaLeadRecords(
       city: null, state: null, zip: null,
     }))
     .filter((r) => r.ownerName && r.address);
+
+  if (segment) {
+    const { data, error } = await untraced(limit).eq('segment', segment);
+    if (error) return { records: [], error: error.message };
+    return { records: toRecords(data ?? []), error: null };
+  }
+
+  let records: TraceRecord[] = [];
+  for (const tier of segmentTiers()) {
+    const remaining = limit - records.length;
+    if (remaining <= 0) break;
+
+    const query = tier.segments
+      ? untraced(remaining).in('segment', tier.segments)
+      : untraced(remaining).not('segment', 'in', unrankedSegmentFilter());
+
+    const { data, error } = await query;
+    if (error) return { records: [], error: error.message };
+    records = records.concat(toRecords(data ?? []));
+  }
 
   return { records, error: null };
 }

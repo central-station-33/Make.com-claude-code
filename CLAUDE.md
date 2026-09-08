@@ -30,6 +30,17 @@ JetAdmin Dashboard (direct Supabase connection)
 - AI enrichment via Claude API (investment thesis, contact strategy)
 - Notify subscribers of Tier 1 properties
 
+## ISA Segment Priority (set 2026-09-08)
+1. **Residential homeowners** — the main search
+2. **Investors**
+3. **Celebrities / athletes** (`athlete`, `film_tv`) — deliberately last; do
+   not let these crowd out the residential pipeline
+
+Encoded in `_shared/segment-priority.ts` and applied to the two *paid* paths:
+Claude enrichment (`enrich-leads`) and skip tracing (`skip-trace-leads`).
+Unlisted segments default to tier 2. `notify-isa` is deliberately NOT ranked
+by segment — an already-enriched hot lead should reach an ISA on score.
+
 ## Free Data Sources in Use
 - NYC Open Data (HPD violations, DOB, PLUTO, Evictions)
 - NJ MOD-IV via NJOGIS ArcGIS API
