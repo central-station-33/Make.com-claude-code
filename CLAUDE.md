@@ -3,7 +3,10 @@
 ## Existing Infrastructure (DO NOT duplicate these)
 - **Database:** Supabase PostgreSQL — use this, not a separate DB
 - **Backend:** Supabase Edge Functions — use these, not Render/Railway/Fly
-- **Frontend/Dashboard:** JetAdmin — connects directly to Supabase
+- **Frontend/Dashboard:** the React app in this repo (`src/`) — Supabase Auth
+  + PrivateRoute-gated pages, calling Supabase directly as a logged-in user.
+  JetAdmin and Retool are retired (2026-09-08) — do not reintroduce either or
+  build anything assuming they exist.
 - **Automation:** Make.com (us2.make.com) — handles orchestration & scheduling
 - **Code Storage:** GitHub (central-station-33/Make.com-claude-code)
 - **AI:** Claude API via Anthropic
@@ -16,7 +19,7 @@ Supabase Edge Functions (scoring, normalization, AI enrichment)
     ↓
 Supabase PostgreSQL Database
     ↑
-JetAdmin Dashboard (direct Supabase connection)
+React Dashboard (this repo's src/ — Supabase Auth, direct Supabase connection)
 ```
 
 ## Target Markets
@@ -76,6 +79,6 @@ user's second approval belongs. `dry_run: true` is free and requires no
 approval at all.
 
 ## Always Ask Before Building
-- Does this already exist in Make.com/JetAdmin/Supabase?
+- Does this already exist in Make.com/Supabase/this repo's React dashboard?
 - Can Supabase Edge Functions handle this instead of a separate server?
 - What's the Supabase project URL for this feature?
