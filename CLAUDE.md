@@ -36,6 +36,10 @@ JetAdmin Dashboard (direct Supabase connection)
 3. **Celebrities / athletes** (`athlete`, `film_tv`) — deliberately last; do
    not let these crowd out the residential pipeline
 
+Renter/inbound segments (`renter`, `general_inquiry`) are unranked and default
+to tier 2. Renters file no public record, so they arrive only via inbound
+capture (`process-inbound-email`), never via a data source.
+
 Encoded in `_shared/segment-priority.ts` and applied to the two *paid* paths:
 Claude enrichment (`enrich-leads`) and skip tracing (`skip-trace-leads`).
 Unlisted segments default to tier 2. `notify-isa` is deliberately NOT ranked
