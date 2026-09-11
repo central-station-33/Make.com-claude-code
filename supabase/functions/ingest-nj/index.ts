@@ -1,6 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { ok, err, handleOptions } from "../_shared/cors.ts";
 
+const MAKE_SECRET = Deno.env.get("MAKE_WEBHOOK_SECRET") ?? "";
+
 const NJOGIS = "https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/Parcels_MODIV_NJ_WM/FeatureServer/0/query";
 
 // High-distress NJ municipalities
@@ -178,6 +180,8 @@ const testConnectivity = async (supabase: ReturnType<typeof createClient>): Prom
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return handleOptions();
+  if (!MAKE_SECRET) return err("Server misconfigured", 500);
+  if (req.headers.get("x-make-secret") !== MAKE_SECRET) return err("Unauthorized", 401);
 
   try {
     const supabase = createClient(

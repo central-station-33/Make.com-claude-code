@@ -3,8 +3,12 @@ import { corsHeaders, ok, err, handleOptions } from "../_shared/cors.ts";
 import { normalizeProperty, generatePropertyHash } from "../_shared/normalization.ts";
 import { scoreProperty } from "../_shared/scoring.ts";
 
+const MAKE_SECRET = Deno.env.get("MAKE_WEBHOOK_SECRET") ?? "";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return handleOptions();
+  if (!MAKE_SECRET) return err("Server misconfigured", 500);
+  if (req.headers.get("x-make-secret") !== MAKE_SECRET) return err("Unauthorized", 401);
 
   try {
     const supabase = createClient(

@@ -1,3 +1,13 @@
+/**
+ * DEAD PATH — do not build on this. It updates a `leads` table that is not
+ * part of the InRange schema (the one PR #13 removed the CRM dashboard for),
+ * so its writes fail; and its scoring prompt is generic "professional
+ * services" qualification that knows nothing about ISA segments, duplicating
+ * enrich-leads badly. Inbound capture now goes process-inbound-email ->
+ * isa_leads -> enrich-leads. Left in place only because a Make scenario may
+ * still call it; safe to delete once that's confirmed.
+ */
+
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {

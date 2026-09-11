@@ -1,6 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { ok, err, handleOptions } from "../_shared/cors.ts";
 
+const MAKE_SECRET = Deno.env.get("MAKE_WEBHOOK_SECRET") ?? "";
+
 // NYC Open Data — HPD Building Violations (wvxf-dwi5)
 const HPD_VIOLATIONS = "https://data.cityofnewyork.us/resource/wvxf-dwi5.json";
 
@@ -542,6 +544,8 @@ const insertBatch = async (
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return handleOptions();
+  if (!MAKE_SECRET) return err("Server misconfigured", 500);
+  if (req.headers.get("x-make-secret") !== MAKE_SECRET) return err("Unauthorized", 401);
 
   try {
     const supabase = createClient(

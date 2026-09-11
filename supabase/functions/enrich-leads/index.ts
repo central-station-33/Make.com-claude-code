@@ -7,6 +7,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { segmentTiers, unrankedSegmentFilter } from '../_shared/segment-priority.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const MAKE_SECRET       = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
@@ -44,6 +45,8 @@ SEGMENT SCORING GUIDANCE:
 - developer: Site control timeline = timing. Entitlement stage = need.
 - expat_relocation: Start date = timing. Company relocation package = budget signal.
 - film_tv: Production schedule = timing. Housing stipend = budget signal.
+- renter: Rental demand — someone looking for a place to rent, almost always from an inbound enquiry. Budget = monthly rent they state (0-1 if unstated; rental budgets don't map to purchase budgets, so never infer a sale price). Authority 2 (they decide their own lease). Timing is the key axis and is usually knowable: a stated move-in date inside 60 days = timing 3. Motivation 3+ if they named a neighborhood, unit, or date — inbound renters self-select as active, unlike a prospecting list.
+- general_inquiry: Inbound of undetermined intent. Do NOT guess a category. Score conservatively (bant 0-4, motivation 1-2), and make the talking points discovery questions that establish whether they're renting, buying, or selling. Say plainly in the summary that intent is unconfirmed.
 - homeowner: Owner of a $500k+ property with NO distress signal required — this is a value-based prospecting list, not an urgency-based one. Property value = budget 2-3 (higher value = higher confidence, but unconfirmed since not pre-approved). Authority defaults to 2 (presumed titleholder). Need and timing default LOW (0-1) unless motivation_signals state an actual reason to sell/move — do not invent urgency that isn't in the data.
 
 TALKING POINTS RULES:
@@ -71,19 +74,41 @@ serve(async (req) => {
   const supabase = getServiceClient();
 
   // Newest-first so freshly ingested hot leads get enriched within hours.
-  let query = supabase
+  const pending = (max: number) => supabase
     .from('isa_leads')
     .select('*')
     .is('ai_summary', null)
     .not('outreach_status', 'in', '("dead","closed")')
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(max);
 
-  if (segment) query = query.eq('segment', segment);
+  let leads: Record<string, unknown>[] = [];
 
-  const { data: leads, error } = await query;
-  if (error) return json({ success: false, error: error.message }, 500);
-  if (!leads?.length) return json({ success: true, data: { enriched: 0 } });
+  if (segment) {
+    // Explicit segment wins outright — a caller naming a segment is asking
+    // for that segment, not for the priority order.
+    const { data, error } = await pending(limit).eq('segment', segment);
+    if (error) return json({ success: false, error: error.message }, 500);
+    leads = data ?? [];
+  } else {
+    // No segment named: spend the budget in priority order so homeowners are
+    // enriched before investors, and investors before athletes/celebrities,
+    // instead of whichever segment happens to have ingested most recently.
+    for (const tier of segmentTiers()) {
+      const remaining = limit - leads.length;
+      if (remaining <= 0) break;
+
+      const query = tier.segments
+        ? pending(remaining).in('segment', tier.segments)
+        : pending(remaining).not('segment', 'in', unrankedSegmentFilter());
+
+      const { data, error } = await query;
+      if (error) return json({ success: false, error: error.message }, 500);
+      leads = leads.concat(data ?? []);
+    }
+  }
+
+  if (!leads.length) return json({ success: true, data: { enriched: 0 } });
 
   let enriched = 0;
   const errors: string[] = [];

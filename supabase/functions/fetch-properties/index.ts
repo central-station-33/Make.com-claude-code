@@ -11,6 +11,18 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // This function uses the service role internally, which bypasses RLS --
+    // so verify_jwt=true alone doesn't gate it, since the public anon key is
+    // itself a valid JWT. Without this check, anyone holding the anon key
+    // (shipped in every browser bundle) could page through owner_name,
+    // owner_phone and owner_email for the entire properties table with no
+    // login at all. The frontend only calls this from behind PrivateRoute,
+    // so a real logged-in session is always expected here.
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const jwt = authHeader.replace(/^Bearer\s+/i, '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
+    if (authError || !user) return err('Unauthorized', 401);
+
     const url    = new URL(req.url);
     const params = url.searchParams;
 

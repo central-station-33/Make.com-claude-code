@@ -1,6 +1,17 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
+// Confirmed via the live project (2026-09-08 security review) that this
+// function has never actually been deployed -- but it shipped in this repo
+// with zero caller-auth check, able to delete ANY auth user given just their
+// id in the POST body, using the service-role admin API. It also fetched the
+// TARGET user's role "to check permissions" but never branched on it -- a
+// vestigial check that looked like a gate and wasn't one. Gated the same way
+// as every other Make-facing function in this project rather than left as
+// the one destructive endpoint with no auth at all, in case this is ever
+// deployed later.
+const MAKE_SECRET = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? ''
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -10,6 +21,16 @@ Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
+  }
+  if (!MAKE_SECRET) {
+    return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+  if (req.headers.get('x-make-secret') !== MAKE_SECRET) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 
   try {

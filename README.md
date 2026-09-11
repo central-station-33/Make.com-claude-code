@@ -1,4 +1,4 @@
-# InRange — Make.com + JetAdmin + Claude AI
+# InRange — Make.com + Supabase + Claude AI
 Distressed property lead pipeline for Jet Realty Advisors
 # JRA Automation Hub — Make.com + Claude AI Workflows
 

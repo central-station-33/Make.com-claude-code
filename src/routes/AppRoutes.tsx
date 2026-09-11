@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 
 // Lazy load components
 const AuthPage = lazy(() => import(/* webpackChunkName: "auth" */ '@/components/auth/AuthPage'));
+const ResetPasswordPage = lazy(() => import(/* webpackChunkName: "reset-password" */ '@/pages/ResetPassword'));
 const DashboardPage = lazy(() => import(/* webpackChunkName: "dashboard" */ '@/pages/Dashboard'));
 const Settings = lazy(() => import(/* webpackChunkName: "settings" */ '@/pages/Settings'));
 const Profile = lazy(() => import(/* webpackChunkName: "profile" */ '@/pages/Profile'));
@@ -76,10 +77,15 @@ export const AppRoutes = () => {
           element={session ? <Navigate to="/dashboard" replace /> : <IndexPage />} 
         />
         
-        <Route 
-          path="/auth" 
-          element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />} 
+        <Route
+          path="/auth"
+          element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />}
         />
+
+        {/* No session or PrivateRoute gate: Supabase's client establishes a
+            recovery session from the emailed link's URL on load, which is
+            what this page needs, regardless of any pre-existing session. */}
+        <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
 
         {/* Protected Routes */}
         <Route 

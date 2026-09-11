@@ -17,20 +17,58 @@
  * run instead of failing silently. Run once with a small limit and check
  * that diagnostic row before trusting the mapping.
  *
- * POST body: { table?: 'isa_leads'|'properties', segment?: string, limit?: number }
+ * Billing note: this is the only per-lookup billed step in the pipeline, so
+ * it spends best-scored-lead-first and defaults to a small batch. A record
+ * the vendor response doesn't describe is left untraced (retryable) rather
+ * than marked no_match -- the lookup is billed either way, and marking it
+ * would lock the lead out of every future run on the strength of a response
+ * we failed to parse. Use dry_run to see what a call would buy, for free.
+ *
+ * TWO-STEP APPROVAL GATE (required 2026-09-08 -- real money, small balance):
+ * no single request, regardless of its flags, can spend money. A call
+ * without confirm_token PROPOSES a batch: it resolves the exact records,
+ * charges nothing, and returns a one-time confirm_token good for 30 minutes
+ * and not usable for at least 2 minutes (so a scenario can't auto-chain
+ * propose->confirm in one breath -- a human is meant to review the proposal
+ * in between). Only a second call presenting that token actually spends,
+ * and only on the exact snapshot of records the proposal showed -- nothing
+ * is re-queried at confirm time, so the batch can't grow between the two
+ * calls. Never wire propose and confirm into the same Make scenario run;
+ * the human approval this exists for has to happen in between.
+ *
+ * POST body: {
+ *   table?: 'isa_leads'|'properties',   // default isa_leads
+ *   segment?: string,                   // default: walk the priority tiers
+ *   limit?: number,                     // default 5, max 100
+ *   min_bant_score?: number,            // isa_leads only; 0 = no filter
+ *   dry_run?: boolean,                  // resolve targets, call nothing, spend nothing, no token
+ *   confirm_token?: string,             // from a prior propose call; presence = "run it"
+ * }
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { getServiceClient } from '../_shared/supabase-client.ts';
+import { segmentTiers, unrankedSegmentFilter } from '../_shared/segment-priority.ts';
 
 const MAKE_SECRET         = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
 const BATCHDATA_API_KEY   = Deno.env.get('BATCHDATA_API_KEY') ?? '';
 const BATCHDATA_ENDPOINT  = 'https://api.batchdata.com/api/v1/property/skip-trace';
 
 // BatchData's bulk skip-trace accepts a batch of requests in one call —
-// capped at 100 per published limits. Default is deliberately small so a
-// first real run (while confirming the field mapping above) costs little.
-const MAX_BATCH = 100;
+// capped at 100 per published limits. The default batch is deliberately far
+// below that: this is billed per lookup against a small balance, and the
+// field mapping above is unverified, so the first batches should be cheap
+// enough that a mismatch costs cents rather than the balance. Raise `limit`
+// per call once a run has been confirmed against the diagnostic.
+const MAX_BATCH     = 100;
+const DEFAULT_BATCH = 5;
+
+// How long a proposed batch stays confirmable, and the minimum gap before it
+// CAN be confirmed. The floor exists so a Make scenario can't propose and
+// confirm back-to-back in one run and call that "two steps" -- there has to
+// be a real gap for a human to actually look at the proposal in between.
+const CONFIRM_TTL_MS       = 30 * 60 * 1000;
+const MIN_CONFIRM_DELAY_MS = 2  * 60 * 1000;
 
 interface TraceRecord {
   id: string;
@@ -52,28 +90,97 @@ serve(async (req) => {
   }
 
   const body: Record<string, unknown> = await req.json().catch(() => ({}));
-  const table   = body.table === 'properties' ? 'properties' : 'isa_leads';
-  const segment = table === 'isa_leads' ? String(body.segment ?? 'homeowner') : undefined;
-  const limit   = Math.min(Math.max(Number(body.limit) || 25, 1), MAX_BATCH);
-
   const supabase = getServiceClient();
+
+  // CONFIRM PATH — a confirm_token means "spend money now." Nothing here
+  // re-resolves which records to trace: it uses the exact snapshot the
+  // matching propose call showed, so the approved batch can't grow between
+  // the two calls, and no combination of body flags reaches this path
+  // without a token minted by an earlier, separate propose call.
+  if (typeof body.confirm_token === 'string' && body.confirm_token) {
+    const nowIso = new Date().toISOString();
+    const confirmableBefore = new Date(Date.now() - MIN_CONFIRM_DELAY_MS).toISOString();
+
+    const { data: confirmation, error: confirmError } = await supabase
+      .from('skip_trace_confirmations')
+      .update({ consumed_at: nowIso })
+      .eq('token', body.confirm_token)
+      .is('consumed_at', null)
+      .gt('expires_at', nowIso)
+      .lt('created_at', confirmableBefore)
+      .select()
+      .maybeSingle();
+
+    if (confirmError) return json({ success: false, error: confirmError.message }, 500);
+    if (!confirmation) {
+      return json({ success: false, error:
+        'confirm_token is invalid, expired, already used, or was issued less than ' +
+        '2 minutes ago. Call again without confirm_token to propose a fresh batch.',
+      }, 400);
+    }
+
+    const records = confirmation.record_ids as TraceRecord[];
+    return await runTrace(supabase, confirmation.table_name as string, confirmation.segment as string | null, records);
+  }
+
+  // PROPOSE PATH — resolves the batch and, unless dry_run, mints a token.
+  // Spends nothing either way.
+  const table   = body.table === 'properties' ? 'properties' : 'isa_leads';
+  // No segment named means "spend this budget in priority order" (homeowner,
+  // then investor, then athlete/celebrity) rather than a fixed segment —
+  // this is the per-hit-billed path, so what it spends on first matters.
+  const segment  = table === 'isa_leads' && body.segment ? String(body.segment) : null;
+  const limit    = Math.min(Math.max(Number(body.limit) || DEFAULT_BATCH, 1), MAX_BATCH);
+  const minScore = Math.max(Number(body.min_bant_score) || 0, 0);
+  const dryRun   = body.dry_run === true;
 
   const { records, error: fetchError } = table === 'properties'
     ? await fetchPropertyRecords(supabase, limit)
-    : await fetchIsaLeadRecords(supabase, segment!, limit);
+    : await fetchIsaLeadRecords(supabase, segment, limit, minScore);
 
   if (fetchError) {
     await persistDiag(supabase, table, { stage: 'query_records', error: fetchError });
     return json({ success: false, error: fetchError }, 500);
+  }
+
+  const preview = records.map((r) => ({ id: r.id, owner: r.ownerName, address: r.address }));
+
+  if (dryRun) {
+    return json({ success: true, data: { dry_run: true, would_trace: records.length, records: preview } });
   }
   if (!records.length) {
     await persistDiag(supabase, table, { stage: 'no_records_to_trace', segment });
     return json({ success: true, data: { attempted: 0, matched: 0 } });
   }
 
+  const token = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + CONFIRM_TTL_MS).toISOString();
+
+  const { error: proposeError } = await supabase.from('skip_trace_confirmations').insert({
+    token, table_name: table, segment, record_ids: records, record_count: records.length, expires_at: expiresAt,
+  });
+  if (proposeError) return json({ success: false, error: proposeError.message }, 500);
+
+  return json({ success: true, data: {
+    confirmation_required: true,
+    confirm_token: token,
+    confirmable_after: new Date(Date.now() + MIN_CONFIRM_DELAY_MS).toISOString(),
+    expires_at: expiresAt,
+    would_trace: records.length,
+    records: preview,
+  } });
+});
+
+async function runTrace(
+  supabase: ReturnType<typeof getServiceClient>,
+  table: string,
+  segment: string | null,
+  records: TraceRecord[],
+): Promise<Response> {
   let rawResponse: unknown = null;
   let matched = 0;
   let noMatch = 0;
+  let unresolved = 0;   // billed, but the response didn't describe them — retryable
   const errors: string[] = [];
 
   try {
@@ -97,7 +204,19 @@ serve(async (req) => {
         const hit = results.get(record.id);
         const nowIso = new Date().toISOString();
 
-        if (hit && (hit.phone || hit.email)) {
+        // A record the response never described is left with a NULL
+        // skip_trace_status so a later run retries it. Marking it 'no_match'
+        // would be indistinguishable from the vendor genuinely having no
+        // contact for them -- and since the untraced query filters on
+        // skip_trace_status IS NULL, that would lock the lead out forever on
+        // the strength of a response we failed to parse. The lookup is billed
+        // either way; there's no reason to lose the lead as well.
+        if (!hit) {
+          unresolved++;
+          continue;
+        }
+
+        if (hit.phone || hit.email) {
           const { error: updateError } = table === 'properties'
             ? await supabase.from('properties').update({
                 owner_phone: hit.phone ?? null,
@@ -131,34 +250,48 @@ serve(async (req) => {
 
   await persistDiag(supabase, table, {
     stage: 'processed', segment,
-    requested: records.length, matched, no_match: noMatch, errors,
+    requested: records.length, matched, no_match: noMatch, unresolved, errors,
     // Raw upstream body, for confirming/correcting the field mapping above.
     raw_response_sample: rawResponse,
   });
 
-  return json({ success: true, data: { attempted: records.length, matched, no_match: noMatch, errors } });
-});
+  return json({ success: true, data: {
+    attempted: records.length, matched, no_match: noMatch, unresolved, errors,
+  } });
+}
 
 async function fetchIsaLeadRecords(
   supabase: ReturnType<typeof getServiceClient>,
-  segment: string,
+  segment: string | null,
   limit: number,
+  minScore: number,
 ): Promise<{ records: TraceRecord[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('isa_leads')
-    .select('id, full_name, entity_name, property_address')
-    .eq('segment', segment)
-    .is('skip_trace_status', null)
-    .is('phone', null)
-    .is('email', null)
-    .not('property_address', 'is', null)
-    .neq('property_address', '')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  // Best-scored first, not newest first. Skip tracing is the only per-hit
+  // billed step in the pipeline while enrichment is comparatively cheap, so
+  // the right order is enrich everything, then buy contact details only for
+  // the leads that scored well enough to be worth a call. Unenriched leads
+  // (bant_score NULL) sort last -- their value is still unknown, and unknown
+  // value shouldn't outrank a confirmed hot lead for a limited budget.
+  const untraced = (max: number) => {
+    const q = supabase
+      .from('isa_leads')
+      .select('id, full_name, entity_name, property_address')
+      .is('skip_trace_status', null)
+      .is('phone', null)
+      .is('email', null)
+      .not('property_address', 'is', null)
+      .neq('property_address', '')
+      .order('bant_score', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(max);
 
-  if (error) return { records: [], error: error.message };
+    // Applied only when asked for: in Postgres NULL >= 0 is NULL, so an
+    // unconditional filter would drop every unenriched lead rather than
+    // merely ranking it last, quietly narrowing the pool to enriched leads.
+    return minScore > 0 ? q.gte('bant_score', minScore) : q;
+  };
 
-  const records = (data ?? [])
+  const toRecords = (rows: Record<string, unknown>[]) => rows
     .map((row) => ({
       id: row.id as string,
       ownerName: (row.full_name ?? row.entity_name ?? '') as string,
@@ -166,6 +299,26 @@ async function fetchIsaLeadRecords(
       city: null, state: null, zip: null,
     }))
     .filter((r) => r.ownerName && r.address);
+
+  if (segment) {
+    const { data, error } = await untraced(limit).eq('segment', segment);
+    if (error) return { records: [], error: error.message };
+    return { records: toRecords(data ?? []), error: null };
+  }
+
+  let records: TraceRecord[] = [];
+  for (const tier of segmentTiers()) {
+    const remaining = limit - records.length;
+    if (remaining <= 0) break;
+
+    const query = tier.segments
+      ? untraced(remaining).in('segment', tier.segments)
+      : untraced(remaining).not('segment', 'in', unrankedSegmentFilter());
+
+    const { data, error } = await query;
+    if (error) return { records: [], error: error.message };
+    records = records.concat(toRecords(data ?? []));
+  }
 
   return { records, error: null };
 }
@@ -184,7 +337,12 @@ async function fetchPropertyRecords(
     .neq('owner_name', '')
     .not('address', 'is', null)
     .neq('address', '')
-    .order('assessed_value', { ascending: false, nullsFirst: false })
+    // Same reasoning as the isa_leads path: buy contact details for the
+    // best-scored properties first. composite_score is the pipeline's own
+    // judgement of a lead; assessed_value only breaks ties within it, since
+    // an expensive building isn't necessarily a workable lead.
+    .order('composite_score', { ascending: false, nullsFirst: false })
+    .order('assessed_value',  { ascending: false, nullsFirst: false })
     .limit(limit);
 
   if (error) return { records: [], error: error.message };
@@ -226,9 +384,20 @@ function parseTraceResult(
   const results = (raw as { results?: unknown[] })?.results;
   if (!Array.isArray(results)) return out;
 
+  const knownIds = new Set(records.map((r) => r.id));
+  // Fall back to position only when the response is plainly 1:1 with what we
+  // sent. Correlating by position against a response of a different length is
+  // a guess, and guessing wrong writes a stranger's phone number onto a lead
+  // an ISA then calls -- worse than returning nothing. Anything uncorrelated
+  // is left out of the map and counted as unresolved by the caller.
+  const positionalOk = results.length === records.length;
+
   results.forEach((entry, i) => {
     const e = entry as Record<string, unknown>;
-    const requestId = (e.requestId as string) ?? records[i]?.id;
+    const echoed = e.requestId as string | undefined;
+    const requestId = echoed && knownIds.has(echoed)
+      ? echoed
+      : positionalOk ? records[i]?.id : undefined;
     if (!requestId) return;
 
     const phones = (e.phoneNumbers ?? e.phones ?? []) as Array<Record<string, unknown>>;
