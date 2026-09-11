@@ -7,7 +7,15 @@
   + PrivateRoute-gated pages, calling Supabase directly as a logged-in user.
   JetAdmin and Retool are retired (2026-09-08) — do not reintroduce either or
   build anything assuming they exist.
-- **Automation:** Make.com (us2.make.com) — handles orchestration & scheduling
+- **Automation:** Make.com (us2.make.com), team ID 1761681 — handles
+  orchestration & scheduling. **This Make team also hosts "Silent Legacy,"
+  an entirely separate, unrelated project (SEC EDGAR/Form D ingest, business
+  registry, news RSS), confirmed isolated to Make folder ID 274107.** Never
+  touch, reference, list-and-modify, or reason about Silent Legacy's
+  scenarios when doing InRange work — the two must never be mixed. Any bulk
+  action across this team's scenarios must explicitly exclude folder 274107;
+  when in doubt about whether a given scenario is InRange's, check its name
+  and folder before acting on it rather than assuming team-wide scope.
 - **Code Storage:** GitHub (central-station-33/Make.com-claude-code)
 - **AI:** Claude API via Anthropic
 
