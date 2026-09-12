@@ -348,8 +348,16 @@ async function fetchIsaLeadRecords(
 // Housing", "North Tower", "5 Year Tax Agreement" all pass through that way.
 // Filter on the shape of the name itself instead: 2-3 alphabetic words, no
 // digits, none of the vocabulary an entity, building or program name uses.
+//
+// Deliberately unanchored (no \b at the end): most of these are word stems
+// meant to catch every inflection ("associat" -> Associates/Association,
+// "compan" -> Company/Companies, "corp" -> Corp/Corporation). A first version
+// wrapped this in \b...\b, which requires a boundary immediately after the
+// stem -- there is none between "associat" and a following "es", so
+// "Roosevelt Island Associates" passed the filter as an "individual" on a
+// live run before this was caught.
 const ENTITY_NAME_HINTS =
-  /\b(llc|l\.l\.c|inc|corp|condo|coop|co-op|associat|ltd|lp|owners|compan|congregation|apt|apartment|realty|holding|manage|partner|plaza|properties|tower|housing|college|school|church|temple|public|agreement|park|lofts|bank|authority|trust|fund|estate|residence|village|garden|heights|spires|ventures|leasing)\b/i;
+  /(llc|l\.l\.c|inc|corp|condo|coop|co-op|associat|ltd|\blp\b|owners|compan|congregation|apt|apartment|realty|holding|manage|partner|plaza|properties|tower|housing|college|school|church|temple|\bpublic\b|agreement|\bpark\b|lofts|bank|authority|trust|fund|estate|residence|village|garden|heights|spires|ventures|leasing)/i;
 
 function looksLikeIndividual(name: string): boolean {
   const words = name.trim().split(/\s+/);
