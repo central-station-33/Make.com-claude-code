@@ -14,12 +14,17 @@
  * the source mix shifts, call this with dry_run and move the cuts until Tier 1
  * is back near the intended ~5%.
  *
+ * Also (re)computes owner_kind (see _shared/owner-classification.ts) for
+ * every row it touches, so this is also how existing rows pick up that
+ * classification after it was added.
+ *
  * POST body: { dry_run?: boolean, limit?: number }
  *   dry_run: compute and report the distribution, write nothing.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { scoreProperty } from '../_shared/scoring.ts';
+import { classifyOwnerKind } from '../_shared/owner-classification.ts';
 
 const MAKE_SECRET = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
 const PAGE = 500;
@@ -43,6 +48,7 @@ Deno.serve(async (req) => {
 
   const tiers: Record<string, number> = {};
   const scoreHistogram: Record<string, number> = {};
+  const ownerKinds: Record<string, number> = {};
   const errors: string[] = [];
   let read = 0;
   let written = 0;
@@ -70,11 +76,14 @@ Deno.serve(async (req) => {
       for (const row of rows) {
         read++;
         const scores = scoreProperty(row as Record<string, unknown>);
+        const ownerKind = classifyOwnerKind(row.owner_name as string | null);
         tiers[scores.priority_tier] = (tiers[scores.priority_tier] ?? 0) + 1;
+        ownerKinds[ownerKind] = (ownerKinds[ownerKind] ?? 0) + 1;
         const k = String(scores.composite_score);
         scoreHistogram[k] = (scoreHistogram[k] ?? 0) + 1;
 
-        if (row.composite_score !== scores.composite_score || row.priority_tier !== scores.priority_tier) {
+        if (row.composite_score !== scores.composite_score || row.priority_tier !== scores.priority_tier
+          || row.owner_kind !== ownerKind) {
           changed++;
         }
         if (dryRun) continue;
@@ -89,6 +98,7 @@ Deno.serve(async (req) => {
             composite_score: scores.composite_score,
             priority_tier: scores.priority_tier,
             deal_type: scores.deal_type,
+            owner_kind: ownerKind,
           })
           .eq('id', row.id);
 
@@ -110,6 +120,7 @@ Deno.serve(async (req) => {
         changed,
         tiers,
         tier_share: Object.fromEntries(Object.entries(tiers).map(([t, n]) => [t, pct(n)])),
+        owner_kinds: ownerKinds,
         score_histogram: scoreHistogram,
         errors: errors.slice(0, 20),
         error_count: errors.length,

@@ -342,44 +342,12 @@ async function fetchIsaLeadRecords(
   return { records, error: null };
 }
 
-// owner_type is not reliable for telling a person from a company: NJ MOD-IV
-// writes building names and tax-program labels straight into owner_name with
-// owner_type='individual' regardless -- "Legacy@Liberty Park", "Public
-// Housing", "North Tower", "5 Year Tax Agreement" all pass through that way.
-// Filter on the shape of the name itself instead: 2-3 alphabetic words, no
-// digits, none of the vocabulary an entity, building or program name uses.
-//
-// Deliberately unanchored (no \b at the end): most of these are word stems
-// meant to catch every inflection ("associat" -> Associates/Association,
-// "compan" -> Company/Companies, "corp" -> Corp/Corporation). A first version
-// wrapped this in \b...\b, which requires a boundary immediately after the
-// stem -- there is none between "associat" and a following "es", so
-// "Roosevelt Island Associates" passed the filter as an "individual" on a
-// live run before this was caught.
-const ENTITY_NAME_HINTS =
-  /(llc|l\.l\.c|inc|corp|condo|coop|co-op|associat|ltd|\blp\b|owners|compan|congregation|apt|apartment|realty|holding|manage|partner|plaza|properties|tower|housing|college|school|church|temple|\bpublic\b|agreement|\bpark\b|lofts|bank|authority|trust|fund|estate|residence|village|garden|heights|spires|ventures|leasing)/i;
-
-function looksLikeIndividual(name: string): boolean {
-  const words = name.trim().split(/\s+/);
-  if (words.length < 2 || words.length > 3) return false;
-  if (ENTITY_NAME_HINTS.test(name)) return false;
-  return words.every((w) => /^[A-Za-z][A-Za-z'.-]*$/.test(w));
-}
-
 async function fetchPropertyRecords(
   supabase: ReturnType<typeof getServiceClient>,
   limit: number,
   individualsOnly: boolean,
 ): Promise<{ records: TraceRecord[]; error: string | null }> {
-  // NYC HPD violations -- the source behind most Tier 1 properties -- are
-  // filed against buildings, which are overwhelmingly LLC-owned: of the 291
-  // properties eligible for tracing, only ~14 have a real individual owner.
-  // A plain `.limit(limit)` before filtering would return mostly entities, so
-  // when filtering to individuals the candidate pool is fetched much larger
-  // and then cut down to `limit` after the name-shape filter runs.
-  const poolSize = individualsOnly ? Math.min(limit * 20, 500) : limit;
-
-  const { data, error } = await supabase
+  let query = supabase
     .from('properties')
     .select('id, owner_name, address, city, state, zip')
     .is('skip_trace_status', null)
@@ -396,17 +364,22 @@ async function fetchPropertyRecords(
     // an expensive building isn't necessarily a workable lead.
     .order('composite_score', { ascending: false, nullsFirst: false })
     .order('assessed_value',  { ascending: false, nullsFirst: false })
-    .limit(poolSize);
+    .limit(limit);
 
+  // owner_kind is computed once and persisted at write/rescore time (see
+  // _shared/owner-classification.ts) -- NYC HPD violations, the source behind
+  // most Tier 1 properties, are filed against buildings, overwhelmingly
+  // LLC-owned, so this used to mean fetching a pool up to 20x the requested
+  // size and filtering it in JS just to find a handful of individuals. A row
+  // written before this column existed has owner_kind NULL and is excluded
+  // from an individuals-only batch rather than reclassified here again; run
+  // rescore-properties to backfill it.
+  if (individualsOnly) query = query.eq('owner_kind', 'individual');
+
+  const { data, error } = await query;
   if (error) return { records: [], error: error.message };
 
-  let rows = data ?? [];
-  if (individualsOnly) {
-    rows = rows.filter((row) => looksLikeIndividual(String(row.owner_name ?? '')));
-  }
-  rows = rows.slice(0, limit);
-
-  const records = rows.map((row) => ({
+  const records = (data ?? []).map((row) => ({
     id: row.id as string,
     ownerName: row.owner_name as string,
     address: row.address as string,
