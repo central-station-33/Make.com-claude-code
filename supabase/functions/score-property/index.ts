@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, ok, err, handleOptions } from "../_shared/cors.ts";
 import { normalizeProperty, generatePropertyHash } from "../_shared/normalization.ts";
 import { scoreProperty } from "../_shared/scoring.ts";
+import { classifyOwnerKind } from "../_shared/owner-classification.ts";
 
 const MAKE_SECRET = Deno.env.get("MAKE_WEBHOOK_SECRET") ?? "";
 
@@ -27,7 +28,9 @@ Deno.serve(async (req) => {
         const scores     = scoreProperty(normalized);
         const hash       = await generatePropertyHash(normalized);
 
-        const isTopTier = scores.priority_tier === "Tier 1" || scores.priority_tier === "Tier 2";
+        // Tier 1 only -- Claude enrichment is billed per lead. See the same
+        // gate in process-raw-properties.
+        const isTopTier = scores.priority_tier === "Tier 1";
 
         const { error } = await supabase.from("properties").upsert(
           {
@@ -62,6 +65,7 @@ Deno.serve(async (req) => {
             auction_date:            normalized.auction_date,
             process_stage:           normalized.process_stage,
             case_number:             normalized.case_number,
+            owner_kind:              classifyOwnerKind(normalized.owner_name as string | null),
             ...scores,
             enrichment_status: isTopTier ? "pending" : "skipped",
             data_sources: [String(normalized.source)],

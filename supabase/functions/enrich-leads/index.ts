@@ -1,6 +1,19 @@
 /**
  * enrich-leads — Claude AI enrichment for ISA leads.
- * Scores BANT, motivation, routing, writes talking points.
+ * Scores BANT, motivation, routing, writes talking points, an investment
+ * thesis and a contact strategy, and records how the assessment was produced.
+ *
+ * Every write records ai_model, ai_prompt_version, ai_enriched_at and token
+ * counts. This is a paid call whose output an ISA acts on directly, so an
+ * assessment that cannot be attributed to a model and prompt version cannot be
+ * audited, superseded, or re-run selectively when the prompt changes. Bump
+ * ENRICH_PROMPT_VERSION whenever the prompt changes meaning.
+ *
+ * Re-enrichment is deliberately NOT automatic: the selection below still only
+ * picks up leads with no ai_summary at all. Stale-version rows are now
+ * identifiable (ai_prompt_version) but re-running them costs money, so that
+ * stays an explicit decision rather than a side effect of deploying a new
+ * prompt.
  *
  * POST body: { limit?: number, segment?: string }
  */
@@ -12,6 +25,10 @@ import { segmentTiers, unrankedSegmentFilter } from '../_shared/segment-priority
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const MAKE_SECRET       = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
 
+const ENRICH_MODEL = 'claude-sonnet-4-6';
+// Bump on any change to ENRICH_SYSTEM_PROMPT or the requested JSON shape.
+const ENRICH_PROMPT_VERSION = '2026-09-12.structured-v1';
+
 function getServiceClient() {
   const url = Deno.env.get('SUPABASE_URL')!;
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -20,7 +37,7 @@ function getServiceClient() {
 
 const ENRICH_SYSTEM_PROMPT = `You are an expert NY/NJ real estate ISA coach with deep knowledge of the local market. Analyze real estate prospects and return structured JSON assessments that ISAs use to prioritize and personalize their outreach.
 
-BANT SCORING (0-12, four components 0-3 each):
+BANT SCORING (score each component 0-3 separately — do NOT return a total):
 - Budget (0-3): 0=unknown, 1=rough range, 2=specific confirmed, 3=pre-approved/verified funds
 - Authority (0-3): 0=unknown, 1=likely decision-maker, 2=confirmed, 3=sole DM with urgency
 - Need (0-3): 0=browsing, 1=general interest, 2=specific criteria, 3=urgent specific need
@@ -29,10 +46,10 @@ BANT SCORING (0-12, four components 0-3 each):
 MOTIVATION SCORE (1-5):
 1=cold/browsing | 2=warm, some signals | 3=engaged, specific questions | 4=hot, clear motivation+timeline | 5=urgent/ready now
 
-ROUTING RULES:
-- hot: bant_score >= 9 AND motivation_score >= 4
-- warm: bant_score >= 7 OR motivation_score >= 3
-- nurture: bant_score >= 4
+ROUTING RULES (bant total = sum of the four components, 0-12):
+- hot: bant total >= 9 AND motivation_score >= 4
+- warm: bant total >= 7 OR motivation_score >= 3
+- nurture: bant total >= 4
 - cold: all other cases
 
 SEGMENT SCORING GUIDANCE:
@@ -46,7 +63,7 @@ SEGMENT SCORING GUIDANCE:
 - expat_relocation: Start date = timing. Company relocation package = budget signal.
 - film_tv: Production schedule = timing. Housing stipend = budget signal.
 - renter: Rental demand — someone looking for a place to rent, almost always from an inbound enquiry. Budget = monthly rent they state (0-1 if unstated; rental budgets don't map to purchase budgets, so never infer a sale price). Authority 2 (they decide their own lease). Timing is the key axis and is usually knowable: a stated move-in date inside 60 days = timing 3. Motivation 3+ if they named a neighborhood, unit, or date — inbound renters self-select as active, unlike a prospecting list.
-- general_inquiry: Inbound of undetermined intent. Do NOT guess a category. Score conservatively (bant 0-4, motivation 1-2), and make the talking points discovery questions that establish whether they're renting, buying, or selling. Say plainly in the summary that intent is unconfirmed.
+- general_inquiry: Inbound of undetermined intent. Do NOT guess a category. Score conservatively (bant components 0-1, motivation 1-2), and make the talking points discovery questions that establish whether they're renting, buying, or selling. Say plainly in the summary that intent is unconfirmed.
 - homeowner: Owner of a $500k+ property with NO distress signal required — this is a value-based prospecting list, not an urgency-based one. Property value = budget 2-3 (higher value = higher confidence, but unconfirmed since not pre-approved). Authority defaults to 2 (presumed titleholder). Need and timing default LOW (0-1) unless motivation_signals state an actual reason to sell/move — do not invent urgency that isn't in the data.
 
 TALKING POINTS RULES:
@@ -58,7 +75,17 @@ TALKING POINTS RULES:
 
 AI SUMMARY: Exactly 2 sentences. Sentence 1: who they are + specific detail. Sentence 2: why they need real estate NOW (specific urgency signal). Use their name and concrete details. For the homeowner segment specifically, if no real urgency signal exists, sentence 2 should say so plainly (e.g. "No stated timeline — this is a value-qualified prospect, not an active seller") rather than fabricating one.
 
+INVESTMENT THESIS: 2-3 sentences on why this specific property or person represents a real estate opportunity for the brokerage — the commission logic, not the prospect's logic. Reference property value, unit count, market or portfolio where known. If there is no genuine thesis (low value, no intent, wrong market), say that plainly instead of manufacturing one.
+
+CONTACT STRATEGY: 2-3 sentences naming the channel to use FIRST and the opening angle. Outreach is phone, email and social only — there are no mail campaigns, so never suggest a letter or postcard. If the owner is a company (LLC, corp, condo or co-op board), say so and direct the ISA at finding the responsible individual (registered agent, managing member, board president) rather than calling the entity.
+
+CONFIDENCE (1-5): how much the supplied input actually supports your assessment. 1 = derived from a public record only, with no stated intent from the prospect. 3 = several corroborating signals. 5 = explicit stated intent with a timeline. Most prospecting-list leads are a 1 or 2, and saying so is more useful than sounding certain. Do not let a fluent summary imply confidence the data does not support.
+
+RISK FLAGS: short strings naming anything that should stop or slow an ISA before they dial. Use these where they apply: "entity owner — no individual to call", "no phone or email on file", "no stated selling intent", "address may be incomplete", "owner may be out of state", "data derived from violation record only". Empty array if genuinely none apply.
+
 Return ONLY valid JSON — no markdown, no explanation, no preamble.`;
+
+const ROUTINGS = new Set(['hot', 'warm', 'nurture', 'cold']);
 
 serve(async (req) => {
   if (req.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
@@ -111,21 +138,63 @@ serve(async (req) => {
   if (!leads.length) return json({ success: true, data: { enriched: 0 } });
 
   let enriched = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
   const errors: string[] = [];
   const anthropicKeyPresent = ANTHROPIC_API_KEY.length > 0;
 
   for (const lead of leads) {
     try {
-      const result = await callClaude(buildPrompt(lead));
-      await supabase.from('isa_leads').update({
-        ai_summary:         result.ai_summary,
-        isa_talking_points: result.isa_talking_points,
-        bant_score:         result.bant_score,
-        motivation_score:   result.motivation_score,
-        routing:            result.routing,
-        updated_at:         new Date().toISOString(),
+      const { result, usage } = await callClaude(buildPrompt(lead));
+
+      // Clamp before writing. The columns carry CHECK constraints, so an
+      // out-of-range number from the model would fail the whole update and
+      // lose an assessment already paid for.
+      const budget    = clampInt(result.bant?.budget    ?? result.bant_budget,    0, 3);
+      const authority = clampInt(result.bant?.authority ?? result.bant_authority, 0, 3);
+      const need      = clampInt(result.bant?.need      ?? result.bant_need,      0, 3);
+      const timing    = clampInt(result.bant?.timing    ?? result.bant_timing,    0, 3);
+
+      // Keep the total consistent with the parts it is made of; fall back to a
+      // model-supplied total only when the components are missing entirely.
+      const components = [budget, authority, need, timing];
+      const bantScore = components.every((c) => c !== null)
+        ? components.reduce((a, c) => a + (c as number), 0)
+        : clampInt(result.bant_score, 0, 12);
+
+      const routing = typeof result.routing === 'string' && ROUTINGS.has(result.routing)
+        ? result.routing
+        : null;
+
+      const nowIso = new Date().toISOString();
+
+      const { error: updateError } = await supabase.from('isa_leads').update({
+        ai_summary:           result.ai_summary ?? null,
+        ai_investment_thesis: result.ai_investment_thesis ?? null,
+        ai_contact_strategy:  result.ai_contact_strategy ?? null,
+        isa_talking_points:   Array.isArray(result.isa_talking_points) ? result.isa_talking_points : [],
+        ai_risk_flags:        Array.isArray(result.ai_risk_flags) ? result.ai_risk_flags : [],
+        ai_bant_budget:       budget,
+        ai_bant_authority:    authority,
+        ai_bant_need:         need,
+        ai_bant_timing:       timing,
+        bant_score:           bantScore,
+        motivation_score:     clampInt(result.motivation_score, 1, 5),
+        ai_confidence:        clampInt(result.ai_confidence, 1, 5),
+        ...(routing ? { routing } : {}),
+        ai_model:             ENRICH_MODEL,
+        ai_prompt_version:    ENRICH_PROMPT_VERSION,
+        ai_enriched_at:       nowIso,
+        ai_input_tokens:      usage.input,
+        ai_output_tokens:     usage.output,
+        updated_at:           nowIso,
       }).eq('id', lead.id);
+
+      if (updateError) throw new Error(updateError.message);
+
       enriched++;
+      inputTokens  += usage.input  ?? 0;
+      outputTokens += usage.output ?? 0;
     } catch (err) {
       errors.push(`${lead.id}: ${(err as Error).message}`);
     }
@@ -139,18 +208,35 @@ serve(async (req) => {
       source: 'diagnostic',
       raw_data: {
         ran_at: new Date().toISOString(),
+        model: ENRICH_MODEL,
+        prompt_version: ENRICH_PROMPT_VERSION,
         anthropic_key_present: anthropicKeyPresent,
         anthropic_key_len: ANTHROPIC_API_KEY.length,
         leads_seen: leads.length,
         enriched,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
         errors,
       },
       processed_at: new Date().toISOString(),
     }, { onConflict: 'property_hash' });
   } catch { /* diagnostics must never break the real response */ }
 
-  return json({ success: true, data: { enriched, errors } });
+  return json({ success: true, data: {
+    enriched,
+    model: ENRICH_MODEL,
+    prompt_version: ENRICH_PROMPT_VERSION,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    errors,
+  } });
 });
+
+const clampInt = (v: unknown, min: number, max: number): number | null => {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return null;
+  return Math.min(Math.max(n, min), max);
+};
 
 function buildPrompt(lead: Record<string, unknown>): string {
   const signals = (lead.motivation_signals as string[] ?? []).join(', ');
@@ -167,15 +253,20 @@ ${lead.origin_country   ? `From: ${lead.origin_country}`                        
 ${lead.production_name  ? `Production: ${lead.production_name}`                       : ''}
 ${lead.property_address ? `Property: ${lead.property_address}`                        : ''}
 ${lead.price_range_min  ? `Budget: $${Number(lead.price_range_min).toLocaleString()}–$${Number(lead.price_range_max).toLocaleString()}` : ''}
+Contact on file: ${lead.phone || lead.email ? 'yes' : 'none — no phone or email'}
 Signals: ${signals || 'None captured'}
 Source: ${lead.source_name ?? 'unknown'}
 
 Return ONLY valid JSON:
 {
   "ai_summary": "<2 sentences: who this is + why they need real estate NOW>",
+  "ai_investment_thesis": "<2-3 sentences: the brokerage's commission logic, or plainly that there isn't one>",
+  "ai_contact_strategy": "<2-3 sentences: which channel first and the opening angle. Phone/email/social only>",
   "isa_talking_points": ["<point 1 — reference actual situation>", "<point 2>", "<point 3>"],
-  "bant_score": <0-12>,
+  "bant": { "budget": <0-3>, "authority": <0-3>, "need": <0-3>, "timing": <0-3> },
   "motivation_score": <1-5>,
+  "ai_confidence": <1-5>,
+  "ai_risk_flags": ["<short flag>", "..."],
   "routing": "<hot|warm|nurture|cold>"
 }`;
 }
@@ -190,8 +281,8 @@ async function callClaude(prompt: string) {
       'content-type':      'application/json',
     },
     body: JSON.stringify({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 600,
+      model:      ENRICH_MODEL,
+      max_tokens: 1200,
       system: [
         {
           type:          'text',
@@ -209,7 +300,14 @@ async function callClaude(prompt: string) {
   const start    = stripped.indexOf('{');
   const end      = stripped.lastIndexOf('}');
   if (start === -1 || end === -1) throw new Error('No JSON object in Claude response');
-  return JSON.parse(stripped.slice(start, end + 1));
+
+  return {
+    result: JSON.parse(stripped.slice(start, end + 1)),
+    usage: {
+      input:  data.usage?.input_tokens  ?? null,
+      output: data.usage?.output_tokens ?? null,
+    },
+  };
 }
 
 function json(body: unknown, status = 200): Response {

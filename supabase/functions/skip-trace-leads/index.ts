@@ -1,28 +1,28 @@
 /**
- * skip-trace-leads — resolves owner phone/email via BatchData's paid skip
- * trace API, for leads/properties that have a name + address but no contact
- * info yet. Approved 2026-09-08 as an explicit, narrow override of the
+ * skip-trace-leads — resolves owner phone/email via DataSkip's paid skip
+ * trace API (dataskip.io), for leads/properties that have a name + address
+ * but no contact info yet. This is an explicit, narrow override of the
  * project's "no paid data sources" default (see CLAUDE.md) — phone/email
  * for individual property owners has no free bulk source, and the ISA
  * pipeline is call/email/social only (no mail campaigns), so this is
  * load-bearing rather than optional.
  *
- * IMPORTANT: BatchData's exact request/response field names could not be
- * verified live from this environment (outbound access to their docs
- * domains is blocked). buildTraceRequest() / parseTraceResult() below are
- * the ONLY two places vendor-specific field names live — everything else
- * (auth, batching, dedupe, DB writes, cost caps) is vendor-agnostic. Every
- * run persists the raw upstream response into raw_properties as
- * diagnostic_skip_trace_<table>, so a field-name mismatch shows up in one
- * run instead of failing silently. Run once with a small limit and check
- * that diagnostic row before trusting the mapping.
+ * Vendor history: CLAUDE.md originally named BatchData for this role
+ * (2026-09-08), but no BatchData account was ever actually opened -- that
+ * approval covered a concept, not a working integration. DataSkip (2026-09-12)
+ * is the vendor actually in use. It calls DataSkip's documented bulk REST
+ * endpoint directly via fetch(); it does not use DataSkip's own npm
+ * CLI/SDK package, since installing a globally-scoped third-party package and
+ * running its browser login flow inside this pipeline would be a large,
+ * unnecessary trust expansion for something a plain HTTP call already does.
  *
- * Billing note: this is the only per-lookup billed step in the pipeline, so
- * it spends best-scored-lead-first and defaults to a small batch. A record
- * the vendor response doesn't describe is left untraced (retryable) rather
- * than marked no_match -- the lookup is billed either way, and marking it
- * would lock the lead out of every future run on the strength of a response
- * we failed to parse. Use dry_run to see what a call would buy, for free.
+ * Billing (per DataSkip's docs): matches cost a flat rate per hit; a miss is
+ * documented and free (`found: false`, `charged: 0`). This is the one place
+ * in the pipeline more contact info costs more money, so it defaults to a
+ * small batch and spends best-scored-lead-first. A response entry that
+ * doesn't parse as a clean hit or a clean documented miss is left untraced
+ * (retryable) rather than assumed either way -- see parseTraceResult.
+ * Use dry_run to see what a call would target, for free.
  *
  * TWO-STEP APPROVAL GATE (required 2026-09-08 -- real money, small balance):
  * no single request, regardless of its flags, can spend money. A call
@@ -36,11 +36,22 @@
  * calls. Never wire propose and confirm into the same Make scenario run;
  * the human approval this exists for has to happen in between.
  *
+ * IMPORTANT: DataSkip's documented request/response shape below hasn't been
+ * exercised against a live account from this session (no way to reach
+ * dataskip.io or test a real call here). buildTraceRequest() /
+ * parseTraceResult() are the ONLY two places vendor-specific field names
+ * live -- everything else (auth, batching, dedupe, DB writes, cost caps) is
+ * vendor-agnostic. Every run persists the raw upstream response into
+ * raw_properties as diagnostic_skip_trace_<table>, so a mismatch shows up in
+ * one run instead of failing silently. Run once with a small limit and check
+ * that diagnostic row before trusting the mapping or raising `limit`.
+ *
  * POST body: {
  *   table?: 'isa_leads'|'properties',   // default isa_leads
  *   segment?: string,                   // default: walk the priority tiers
  *   limit?: number,                     // default 5, max 100
  *   min_bant_score?: number,            // isa_leads only; 0 = no filter
+ *   individuals_only?: boolean,         // properties only; see fetchPropertyRecords
  *   dry_run?: boolean,                  // resolve targets, call nothing, spend nothing, no token
  *   confirm_token?: string,             // from a prior propose call; presence = "run it"
  * }
@@ -50,16 +61,16 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { getServiceClient } from '../_shared/supabase-client.ts';
 import { segmentTiers, unrankedSegmentFilter } from '../_shared/segment-priority.ts';
 
-const MAKE_SECRET         = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
-const BATCHDATA_API_KEY   = Deno.env.get('BATCHDATA_API_KEY') ?? '';
-const BATCHDATA_ENDPOINT  = 'https://api.batchdata.com/api/v1/property/skip-trace';
+const MAKE_SECRET        = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
+const DATASKIP_API_KEY   = Deno.env.get('DATASKIP_API_KEY') ?? '';
+const DATASKIP_ENDPOINT  = 'https://app.dataskip.io/api/v1/skip-trace-bulk';
 
-// BatchData's bulk skip-trace accepts a batch of requests in one call —
-// capped at 100 per published limits. The default batch is deliberately far
-// below that: this is billed per lookup against a small balance, and the
-// field mapping above is unverified, so the first batches should be cheap
-// enough that a mismatch costs cents rather than the balance. Raise `limit`
-// per call once a run has been confirmed against the diagnostic.
+// DataSkip's bulk endpoint accepts up to 100 addresses per call. The default
+// batch is deliberately far below that: this is billed per match against a
+// small balance, and though DataSkip's request/response shape is documented,
+// it hasn't been exercised against a live account from this session, so the
+// first real batches should be small. Raise `limit` per call once a run has
+// been confirmed against the diagnostic.
 const MAX_BATCH     = 100;
 const DEFAULT_BATCH = 5;
 
@@ -85,8 +96,8 @@ serve(async (req) => {
   if (req.headers.get('x-make-secret') !== MAKE_SECRET) {
     return json({ success: false, error: 'Unauthorized' }, 401);
   }
-  if (!BATCHDATA_API_KEY) {
-    return json({ success: false, error: 'BATCHDATA_API_KEY not configured' }, 500);
+  if (!DATASKIP_API_KEY) {
+    return json({ success: false, error: 'DATASKIP_API_KEY not configured' }, 500);
   }
 
   const body: Record<string, unknown> = await req.json().catch(() => ({}));
@@ -132,10 +143,11 @@ serve(async (req) => {
   const segment  = table === 'isa_leads' && body.segment ? String(body.segment) : null;
   const limit    = Math.min(Math.max(Number(body.limit) || DEFAULT_BATCH, 1), MAX_BATCH);
   const minScore = Math.max(Number(body.min_bant_score) || 0, 0);
+  const individualsOnly = table === 'properties' && body.individuals_only === true;
   const dryRun   = body.dry_run === true;
 
   const { records, error: fetchError } = table === 'properties'
-    ? await fetchPropertyRecords(supabase, limit)
+    ? await fetchPropertyRecords(supabase, limit, individualsOnly)
     : await fetchIsaLeadRecords(supabase, segment, limit, minScore);
 
   if (fetchError) {
@@ -146,6 +158,11 @@ serve(async (req) => {
   const preview = records.map((r) => ({ id: r.id, owner: r.ownerName, address: r.address }));
 
   if (dryRun) {
+    // Make discards the response body from the calling scenario, and a
+    // dry run writes nowhere else (unlike a real propose, whose token and
+    // record snapshot land in skip_trace_confirmations) -- without this the
+    // result of a dry run triggered from Make would be unrecoverable.
+    await persistDiag(supabase, table, { stage: 'dry_run', segment, individuals_only: individualsOnly, would_trace: records.length, records: preview });
     return json({ success: true, data: { dry_run: true, would_trace: records.length, records: preview } });
   }
   if (!records.length) {
@@ -180,14 +197,14 @@ async function runTrace(
   let rawResponse: unknown = null;
   let matched = 0;
   let noMatch = 0;
-  let unresolved = 0;   // billed, but the response didn't describe them — retryable
+  let unresolved = 0;   // response entry didn't parse as a clean hit or documented miss — retryable
   const errors: string[] = [];
 
   try {
-    const res = await fetch(BATCHDATA_ENDPOINT, {
+    const res = await fetch(DATASKIP_ENDPOINT, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${BATCHDATA_API_KEY}`,
+        'Authorization': `Bearer ${DATASKIP_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(buildTraceRequest(records)),
@@ -195,8 +212,10 @@ async function runTrace(
 
     rawResponse = await res.json().catch(() => null);
 
-    if (!res.ok) {
-      errors.push(`BatchData ${res.status}: ${JSON.stringify(rawResponse).slice(0, 300)}`);
+    if (res.status === 402) {
+      errors.push(`DataSkip 402: insufficient balance — ${JSON.stringify(rawResponse).slice(0, 200)}`);
+    } else if (!res.ok) {
+      errors.push(`DataSkip ${res.status}: ${JSON.stringify(rawResponse).slice(0, 300)}`);
     } else {
       const results = parseTraceResult(rawResponse, records);
 
@@ -204,13 +223,12 @@ async function runTrace(
         const hit = results.get(record.id);
         const nowIso = new Date().toISOString();
 
-        // A record the response never described is left with a NULL
-        // skip_trace_status so a later run retries it. Marking it 'no_match'
-        // would be indistinguishable from the vendor genuinely having no
-        // contact for them -- and since the untraced query filters on
-        // skip_trace_status IS NULL, that would lock the lead out forever on
-        // the strength of a response we failed to parse. The lookup is billed
-        // either way; there's no reason to lose the lead as well.
+        // A record the response never described as either a clean hit or a
+        // clean documented miss is left with a NULL skip_trace_status so a
+        // later run retries it, rather than marked 'no_match' -- and since
+        // the untraced query filters on skip_trace_status IS NULL, marking it
+        // wrongly would lock the lead out forever on the strength of a
+        // response we failed to parse.
         if (!hit) {
           unresolved++;
           continue;
@@ -251,7 +269,8 @@ async function runTrace(
   await persistDiag(supabase, table, {
     stage: 'processed', segment,
     requested: records.length, matched, no_match: noMatch, unresolved, errors,
-    // Raw upstream body, for confirming/correcting the field mapping above.
+    // Raw upstream body, for confirming the response shape assumed below
+    // actually matches what DataSkip returns on a real account.
     raw_response_sample: rawResponse,
   });
 
@@ -326,11 +345,13 @@ async function fetchIsaLeadRecords(
 async function fetchPropertyRecords(
   supabase: ReturnType<typeof getServiceClient>,
   limit: number,
+  individualsOnly: boolean,
 ): Promise<{ records: TraceRecord[]; error: string | null }> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('properties')
     .select('id, owner_name, address, city, state, zip')
     .is('skip_trace_status', null)
+    .is('quarantined_at', null)
     .is('owner_phone', null)
     .is('owner_email', null)
     .not('owner_name', 'is', null)
@@ -345,6 +366,17 @@ async function fetchPropertyRecords(
     .order('assessed_value',  { ascending: false, nullsFirst: false })
     .limit(limit);
 
+  // owner_kind is computed once and persisted at write/rescore time (see
+  // _shared/owner-classification.ts) -- NYC HPD violations, the source behind
+  // most Tier 1 properties, are filed against buildings, overwhelmingly
+  // LLC-owned, so this used to mean fetching a pool up to 20x the requested
+  // size and filtering it in JS just to find a handful of individuals. A row
+  // written before this column existed has owner_kind NULL and is excluded
+  // from an individuals-only batch rather than reclassified here again; run
+  // rescore-properties to backfill it.
+  if (individualsOnly) query = query.eq('owner_kind', 'individual');
+
+  const { data, error } = await query;
   if (error) return { records: [], error: error.message };
 
   const records = (data ?? []).map((row) => ({
@@ -359,56 +391,73 @@ async function fetchPropertyRecords(
   return { records, error: null };
 }
 
-// --- Vendor-specific mapping (best-effort, unverified — see file header) ---
+// --- Vendor-specific mapping (DataSkip bulk API — dataskip.io/developers) ---
+
+// isa_leads.property_address is stored as one combined string
+// ("1212 AVENUE V, BROOKLYN, NY 10312"), but DataSkip requires the street
+// line alone in `address` -- a combined string there will not match.
+// properties.address/city/state/zip are already separate columns and pass
+// through unchanged (fetchPropertyRecords never sets a null city).
+function splitFullAddress(full: string): { street: string; city?: string; state?: string; zip?: string } {
+  const parts = full.split(',').map((p) => p.trim()).filter(Boolean);
+  const street = parts[0] ?? full.trim();
+  const last = parts[parts.length - 1] ?? '';
+  const m = last.match(/^([A-Za-z]{2})\s+(\d{5})(-\d{4})?$/);
+  return { street, city: parts.length >= 3 ? parts[1] : undefined, state: m?.[1], zip: m?.[2] };
+}
 
 function buildTraceRequest(records: TraceRecord[]) {
   return {
-    requests: records.map((r) => ({
-      requestId: r.id,
-      propertyAddress: {
-        street: r.address,
+    addresses: records.map((r) => {
+      if (!r.city && r.address.includes(',')) {
+        const parsed = splitFullAddress(r.address);
+        return {
+          address: parsed.street,
+          city: parsed.city,
+          state: parsed.state ?? r.state ?? undefined,
+          zip: parsed.zip ?? r.zip ?? undefined,
+        };
+      }
+      return {
+        address: r.address,
         city: r.city ?? undefined,
         state: r.state ?? undefined,
         zip: r.zip ?? undefined,
-      },
-      name: r.ownerName,
-    })),
+      };
+    }),
   };
 }
 
+// DataSkip's bulk response has no per-entry ID to echo back -- `results` is
+// documented as strictly the same order and length as the request, so
+// correlation here is positional only, guarded by a strict length check.
+// If that guard ever fails, every record in the batch is left unresolved
+// (retried later) rather than guessed at.
 function parseTraceResult(
   raw: unknown,
   records: TraceRecord[],
 ): Map<string, { phone: string | null; email: string | null }> {
   const out = new Map<string, { phone: string | null; email: string | null }>();
   const results = (raw as { results?: unknown[] })?.results;
-  if (!Array.isArray(results)) return out;
-
-  const knownIds = new Set(records.map((r) => r.id));
-  // Fall back to position only when the response is plainly 1:1 with what we
-  // sent. Correlating by position against a response of a different length is
-  // a guess, and guessing wrong writes a stranger's phone number onto a lead
-  // an ISA then calls -- worse than returning nothing. Anything uncorrelated
-  // is left out of the map and counted as unresolved by the caller.
-  const positionalOk = results.length === records.length;
+  if (!Array.isArray(results) || results.length !== records.length) return out;
 
   results.forEach((entry, i) => {
-    const e = entry as Record<string, unknown>;
-    const echoed = e.requestId as string | undefined;
-    const requestId = echoed && knownIds.has(echoed)
-      ? echoed
-      : positionalOk ? records[i]?.id : undefined;
-    if (!requestId) return;
+    const e = entry as { found?: boolean; phones?: Array<{ number?: string; dnc?: boolean }>; emails?: string[] } | null;
+    const id = records[i]?.id;
+    if (!id || !e || typeof e.found !== 'boolean') return; // malformed entry -- leave unresolved for retry
 
-    const phones = (e.phoneNumbers ?? e.phones ?? []) as Array<Record<string, unknown>>;
-    const emails = (e.emails ?? []) as Array<Record<string, unknown> | string>;
+    if (!e.found) {
+      // A documented, unambiguous miss -- DataSkip does not charge for these.
+      out.set(id, { phone: null, email: null });
+      return;
+    }
 
-    const phone = phones[0] ? String(phones[0].number ?? phones[0].phone ?? '') || null : null;
-    const email = emails[0]
-      ? (typeof emails[0] === 'string' ? emails[0] : String((emails[0] as Record<string, unknown>).email ?? '')) || null
-      : null;
-
-    out.set(requestId, { phone, email });
+    // Never surface a Do-Not-Call number as something an ISA should dial --
+    // outreach here is call/email/social only. If every number on the match
+    // is DNC-flagged, phone stays null even though DataSkip did find one.
+    const phone = (e.phones ?? []).find((p) => !p.dnc)?.number ?? null;
+    const email = (e.emails ?? [])[0] ?? null;
+    out.set(id, { phone, email });
   });
 
   return out;
