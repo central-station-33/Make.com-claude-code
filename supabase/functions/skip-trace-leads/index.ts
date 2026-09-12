@@ -331,6 +331,7 @@ async function fetchPropertyRecords(
     .from('properties')
     .select('id, owner_name, address, city, state, zip')
     .is('skip_trace_status', null)
+    .is('quarantined_at', null)
     .is('owner_phone', null)
     .is('owner_email', null)
     .not('owner_name', 'is', null)

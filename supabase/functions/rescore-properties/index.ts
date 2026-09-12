@@ -53,9 +53,14 @@ Deno.serve(async (req) => {
       const to = cap ? Math.min(from + PAGE, cap) - 1 : from + PAGE - 1;
       if (cap && from >= cap) break;
 
+      // Quarantined rows keep whatever tier they were parked at. Rescoring
+      // them would recompute priority_tier from their (fabricated) attributes
+      // and promote them straight back into Tier 1, which is exactly what the
+      // quarantine exists to prevent.
       const { data: rows, error } = await supabase
         .from('properties')
         .select('*')
+        .is('quarantined_at', null)
         .order('id', { ascending: true })
         .range(from, to);
 

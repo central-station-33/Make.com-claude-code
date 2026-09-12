@@ -27,7 +27,9 @@ Deno.serve(async (req) => {
         const scores     = scoreProperty(normalized);
         const hash       = await generatePropertyHash(normalized);
 
-        const isTopTier = scores.priority_tier === "Tier 1" || scores.priority_tier === "Tier 2";
+        // Tier 1 only -- Claude enrichment is billed per lead. See the same
+        // gate in process-raw-properties.
+        const isTopTier = scores.priority_tier === "Tier 1";
 
         const { error } = await supabase.from("properties").upsert(
           {

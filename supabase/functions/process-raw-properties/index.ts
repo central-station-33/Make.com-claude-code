@@ -194,10 +194,12 @@ Deno.serve(async (req) => {
       const scores     = scoreProperty(normalized);
       const hash       = await generatePropertyHash(normalized);
 
+      // Tier 1 only. Claude enrichment is billed per lead, and the 2026-09-12
+      // recalibration moved Tier 1+2 from ~0% of inventory to ~17% -- keeping
+      // both would have tripled spend on the next ingest without anyone asking
+      // for it. Tier 1 is ~5%, which is the batch an ISA can actually work.
       const enrichmentStatus =
-        scores.priority_tier === "Tier 1" || scores.priority_tier === "Tier 2"
-          ? "pending"
-          : "skipped";
+        scores.priority_tier === "Tier 1" ? "pending" : "skipped";
 
       const { error: upsertError } = await supabase.from("properties").upsert(
         {
