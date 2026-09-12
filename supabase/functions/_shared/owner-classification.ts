@@ -26,8 +26,13 @@
 // "Roosevelt Island Associates" pass as an "individual" on a live run.
 // "lp", "public" and "park" are kept whole-word: unanchored they would
 // wrongly flag real surnames/streets like "Alpert" and "Parker".
+// hdfc: NYC-specific -- Housing Development Fund Corporation, the standard
+// designation for a low-income co-op corp (e.g. "Beulah Cluster Hdfc",
+// caught live in a skip-trace dry run this filter had otherwise passed as an
+// individual). No real surname is "Hdfc", so this carries no false-positive
+// risk the way an unanchored "park" or "lp" would.
 const ENTITY_NAME_HINTS =
-  /(llc|l\.l\.c|inc|corp|condo|coop|co-op|associat|ltd|\blp\b|owners|compan|congregation|apt|apartment|realty|holding|manage|partner|plaza|properties|tower|housing|college|school|church|temple|\bpublic\b|agreement|\bpark\b|lofts|bank|authority|trust|fund|estate|residence|village|garden|heights|spires|ventures|leasing)/i;
+  /(llc|l\.l\.c|inc|corp|condo|coop|co-op|hdfc|associat|ltd|\blp\b|owners|compan|congregation|apt|apartment|realty|holding|manage|partner|plaza|properties|tower|housing|college|school|church|temple|\bpublic\b|agreement|\bpark\b|lofts|bank|authority|trust|fund|estate|residence|village|garden|heights|spires|ventures|leasing)/i;
 
 export type OwnerKind = 'individual' | 'entity' | 'unknown';
 
