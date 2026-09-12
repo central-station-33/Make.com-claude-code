@@ -86,6 +86,15 @@ the board. It is deliberately gated behind two separate approvals (a `propose`
 call that spends nothing, then a later `confirm` call), and the second approval
 has never been given.
 
+It also could not have worked if it had been. Contact fields were stored as `''`
+rather than NULL — `ingest-leads` spread the Make payload wholesale on insert
+(`"phone":"{{2.owner_phone}}"` resolves to `""`) and `normalizeProperty`
+returned `formatPhone('') === ''`. Skip tracing selects targets with
+`phone IS NULL`, so every such row read as "already has a phone" and was
+permanently ineligible. Fixed 2026-09-12 in both writers and backfilled:
+eligible targets went from 0 to 31 homeowner leads, and from 3 properties (all
+three fabricated) to 291.
+
 **Needed:** one real skip-trace run on ~25 Tier 1 leads. That produces the two
 numbers the business cannot be planned without: contact-resolution rate and
 cost per contactable lead. Without them you cannot price the product, forecast
@@ -194,9 +203,10 @@ calibrated to that reality (32 / 28 / 25), but they are calibrated to *today's*
 `rescore-properties` with `{"dry_run": true}` and move the cuts when the mix
 shifts materially.
 
-There is also a dead dimension: `burnt_out_score` and
-`burnt_out_landlord_score` columns exist but nothing in the scoring engine
-computes them, despite "find burnt out landlords" being a stated project goal.
+Two columns are also unpopulated despite "find burnt out landlords" being a
+stated project goal: `burnt_out_landlord_score` is computed by
+`burnt-out-landlord-scan`, which has never been wired to a scenario and so has
+never run, and `burnt_out_score` is computed by nothing at all.
 
 ---
 
