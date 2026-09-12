@@ -31,8 +31,15 @@
 // caught live in a skip-trace dry run this filter had otherwise passed as an
 // individual). No real surname is "Hdfc", so this carries no false-positive
 // risk the way an unanchored "park" or "lp" would.
+// parking/vacant/area: NJ MOD-IV sometimes carries a property-use description
+// where an owner name belongs (e.g. "Parking Area", caught live in a
+// skip-trace dry run) -- the same pattern already seen in "Public Housing",
+// "5 Year Tax Agreement", "North Tower". Deliberately NOT adding "land" or
+// "block" here despite being tempting for the same reason -- both are real
+// surnames (Edwin Land, Herbert Block), so guessing ahead of actual evidence
+// risks misclassifying an individual instead of fixing a real problem.
 const ENTITY_NAME_HINTS =
-  /(llc|l\.l\.c|inc|corp|condo|coop|co-op|hdfc|associat|ltd|\blp\b|owners|compan|congregation|apt|apartment|realty|holding|manage|partner|plaza|properties|tower|housing|college|school|church|temple|\bpublic\b|agreement|\bpark\b|lofts|bank|authority|trust|fund|estate|residence|village|garden|heights|spires|ventures|leasing)/i;
+  /(llc|l\.l\.c|inc|corp|condo|coop|co-op|hdfc|associat|ltd|\blp\b|owners|compan|congregation|apt|apartment|realty|holding|manage|partner|plaza|properties|tower|housing|college|school|church|temple|\bpublic\b|agreement|\bpark\b|lofts|bank|authority|trust|fund|estate|residence|village|garden|heights|spires|ventures|leasing|parking|vacant|\barea\b)/i;
 
 export type OwnerKind = 'individual' | 'entity' | 'unknown';
 

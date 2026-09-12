@@ -40,7 +40,7 @@ classified AS (
     CASE
       WHEN name = '' THEN 'unknown'
       WHEN word_count BETWEEN 2 AND 3
-        AND name !~* '(llc|l\.l\.c|inc|corp|condo|coop|co-op|hdfc|associat|ltd|\ylp\y|owners|compan|congregation|apt|apartment|realty|holding|manage|partner|plaza|properties|tower|housing|college|school|church|temple|\ypublic\y|agreement|\ypark\y|lofts|bank|authority|trust|fund|estate|residence|village|garden|heights|spires|ventures|leasing)'
+        AND name !~* '(llc|l\.l\.c|inc|corp|condo|coop|co-op|hdfc|associat|ltd|\ylp\y|owners|compan|congregation|apt|apartment|realty|holding|manage|partner|plaza|properties|tower|housing|college|school|church|temple|\ypublic\y|agreement|\ypark\y|lofts|bank|authority|trust|fund|estate|residence|village|garden|heights|spires|ventures|leasing|parking|vacant|\yarea\y)'
         AND name ~ '^[A-Za-z][A-Za-z''.-]*( [A-Za-z][A-Za-z''.-]*){1,2}$'
       THEN 'individual'
       ELSE 'entity'
