@@ -158,6 +158,11 @@ serve(async (req) => {
   const preview = records.map((r) => ({ id: r.id, owner: r.ownerName, address: r.address }));
 
   if (dryRun) {
+    // Make discards the response body from the calling scenario, and a
+    // dry run writes nowhere else (unlike a real propose, whose token and
+    // record snapshot land in skip_trace_confirmations) -- without this the
+    // result of a dry run triggered from Make would be unrecoverable.
+    await persistDiag(supabase, table, { stage: 'dry_run', segment, individuals_only: individualsOnly, would_trace: records.length, records: preview });
     return json({ success: true, data: { dry_run: true, would_trace: records.length, records: preview } });
   }
   if (!records.length) {
