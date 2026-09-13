@@ -75,7 +75,7 @@ serve(async (req) => {
           motivation_signals: normalized.motivation_signals ?? [],
           isa_talking_points: normalized.isa_talking_points ?? [],
           raw_data: normalized.raw_data ?? {},
-          ...normalized,
+          ...dropEmptyStrings(normalized),
         });
         if (insertError) throw new Error(insertError.message);
       }
@@ -102,6 +102,21 @@ serve(async (req) => {
 
   return json({ success: true, data: { fetched: leads.length, upserted, errors } });
 });
+
+/**
+ * Make maps absent source fields to "" (e.g. "phone":"{{2.owner_phone}}" when
+ * the property has no phone), and the insert below spreads the payload
+ * wholesale, so those land in the column as empty strings. That is not the same
+ * as NULL: skip-trace-leads selects its targets with `phone IS NULL`, so an ''
+ * reads as "already has contact info" and locks the lead out of tracing
+ * permanently. The update path already guards each field individually; this
+ * does the same for insert, and for every field rather than a named few.
+ */
+function dropEmptyStrings(obj: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => !(typeof v === 'string' && v.trim() === '')),
+  );
+}
 
 function normalizeLeadFields(
   raw: Record<string, unknown>,

@@ -7,7 +7,15 @@
   + PrivateRoute-gated pages, calling Supabase directly as a logged-in user.
   JetAdmin and Retool are retired (2026-09-08) — do not reintroduce either or
   build anything assuming they exist.
-- **Automation:** Make.com (us2.make.com) — handles orchestration & scheduling
+- **Automation:** Make.com (us2.make.com), team ID 1761681 — handles
+  orchestration & scheduling. **This Make team also hosts "Silent Legacy,"
+  an entirely separate, unrelated project (SEC EDGAR/Form D ingest, business
+  registry, news RSS), confirmed isolated to Make folder ID 274107.** Never
+  touch, reference, list-and-modify, or reason about Silent Legacy's
+  scenarios when doing InRange work — the two must never be mixed. Any bulk
+  action across this team's scenarios must explicitly exclude folder 274107;
+  when in doubt about whether a given scenario is InRange's, check its name
+  and folder before acting on it rather than assuming team-wide scope.
 - **Code Storage:** GitHub (central-station-33/Make.com-claude-code)
 - **AI:** Claude API via Anthropic
 
@@ -63,9 +71,15 @@ by segment — an already-enriched hot lead should reach an ISA on score.
 ## Approved Exception: Paid Skip Tracing
 Owner phone/email has no free bulk source (mailing address, yes; phone/email,
 no). Outreach is call/email/social only — no mail campaigns — so this is
-required, not optional. Vendor: BatchData (`skip-trace-leads` edge function).
-This exception is scoped to phone/email contact resolution only; the "no
-paid data sources" rule still applies everywhere else.
+required, not optional. Vendor: **DataSkip** (dataskip.io) via the
+`skip-trace-leads` edge function, called directly over its documented REST
+API — no third-party CLI/SDK package is installed for this. (BatchData was
+named here 2026-09-08 but an account was never actually opened; that was an
+approval of a vendor concept, never a working integration. DataSkip replaced
+it 2026-09-12 and is the vendor actually in use — do not reintroduce
+BatchData without the user explicitly asking for it again.) This exception
+is scoped to phone/email contact resolution only; the "no paid data sources"
+rule still applies everywhere else.
 
 **Spend approval (set 2026-09-08, small account balance):** never trigger a
 real (non-dry-run) skip-trace run without the user's explicit approval given

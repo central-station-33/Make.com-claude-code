@@ -13,6 +13,14 @@ export const cleanName = (name: string): string => {
     .toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
+// Contact fields must be NULL when absent, never ''. Skip tracing selects its
+// targets with `phone IS NULL`, so an empty string reads as "already has a
+// phone" and silently makes the lead ineligible forever.
+export const nullIfEmpty = (v: unknown): string | null => {
+  const s = typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim();
+  return s === '' ? null : s;
+};
+
 export const formatPhone = (phone: string): string => {
   if (!phone) return '';
   const d = String(phone).replace(/\D/g, '');
@@ -69,8 +77,8 @@ export const normalizeProperty = (raw: Record<string, unknown>): Record<string, 
     assessed_value: parseCurrency(raw.assessed_value),
     taxes_owed:   parseCurrency(raw.taxes_owed),
     owner_name:   cleanName(raw.owner_name as string || ''),
-    owner_phone:  formatPhone(raw.owner_phone as string || ''),
-    owner_email:  (raw.owner_email as string || '').toLowerCase().trim(),
+    owner_phone:  nullIfEmpty(formatPhone(raw.owner_phone as string || '')),
+    owner_email:  nullIfEmpty((raw.owner_email as string || '').toLowerCase()),
     owner_mailing_address: raw.owner_mailing_address as string || '',
     owner_type:   (raw.owner_type  as string || 'unknown').toLowerCase(),
     owner_state:  (raw.owner_state as string || '').toUpperCase().trim(),

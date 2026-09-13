@@ -1,7 +1,7 @@
 /**
  * Lead segment priority — governs which segments consume scarce, *paid*
- * resources first: Claude enrichment (per-token) and BatchData skip tracing
- * (per-hit). Set 2026-09-08: residential homeowners are the main search,
+ * resources first: Claude enrichment (per-token) and DataSkip skip tracing
+ * (per-match). Set 2026-09-08: residential homeowners are the main search,
  * investors second, celebrities/athletes third.
  *
  * This intentionally does NOT gate notify-isa. Priority is about what we

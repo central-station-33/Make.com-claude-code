@@ -55,19 +55,30 @@ export const calculateDealQualityScore = (property: Record<string, unknown>): nu
   const type = ((property.property_type as string) || '').toLowerCase().replace(/[\s-]/g, '_');
   score += TYPE_PTS[type] || 10;
 
-  const arv = Number(property.estimated_arv || 0);
+  // assessed_value covers ~3x more of the live NY/NJ inventory than
+  // estimated_arv (686 rows vs 223), so it is the fallback value basis.
+  const value = Number(property.estimated_arv || 0) || Number(property.assessed_value || 0);
   const owed = Number(property.amount_owed || 0);
   const ask = Number(property.asking_price || 0);
 
-  if (arv > 0) {
-    const eq = ((arv - owed) / arv) * 100;
+  // Commission scales with sale price, so value is itself a quality signal.
+  if (value >= 2_000_000) score += 25;
+  else if (value >= 1_000_000) score += 20;
+  else if (value >= 750_000) score += 15;
+  else if (value >= 500_000) score += 10;
+  else if (value >= 250_000) score += 5;
+
+  // A missing amount_owed means debt is unknown, not that the property is free
+  // and clear -- treating it as 0 handed out the full equity bonus on no data.
+  if (value > 0 && owed > 0) {
+    const eq = ((value - owed) / value) * 100;
     if (eq >= 50) score += 30;
     else if (eq >= 30) score += 20;
     else if (eq >= 15) score += 10;
   }
 
-  if (arv > 0 && ask > 0) {
-    const bm = ((arv - ask) / arv) * 100;
+  if (value > 0 && ask > 0) {
+    const bm = ((value - ask) / value) * 100;
     if (bm >= 30) score += 25;
     else if (bm >= 20) score += 15;
     else if (bm >= 10) score += 8;
@@ -124,10 +135,16 @@ export const assignCompositeScore = (s: {
 }): number =>
   clamp(round(s.distress * 0.35 + s.dealQuality * 0.30 + s.contactLikelihood * 0.20 + s.timelineUrgency * 0.15), 0, 100);
 
+// Cuts are percentiles, calibrated 2026-09-12 against the live 897-property
+// NY/NJ set: Tier 1 ~5%, Tier 2 ~11%, Tier 3 ~32%, Tier 4 ~51%. The previous
+// 80/60/40 cuts were unreachable -- with free public data (no owner phone, no
+// auction dates, debt known on 1 row in 6) the composite tops out in the low
+// 40s, so 99.7% of inventory landed in Tier 4 and the tiers ranked nothing.
+// Recalibrate when the source mix changes materially (rescore-properties).
 export const assignPriorityTier = (score: number): string => {
-  if (score >= 80) return 'Tier 1';
-  if (score >= 60) return 'Tier 2';
-  if (score >= 40) return 'Tier 3';
+  if (score >= 32) return 'Tier 1';
+  if (score >= 28) return 'Tier 2';
+  if (score >= 25) return 'Tier 3';
   return 'Tier 4';
 };
 
