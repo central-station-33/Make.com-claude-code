@@ -50,9 +50,17 @@
  * Requires secrets SIMPLYRETS_API_KEY / SIMPLYRETS_API_SECRET (Basic Auth) --
  * not set by this session; add them as Supabase Edge Function secrets.
  *
+ * Batch mode defaults to state='NJ' -- confirmed live (see above) as the only
+ * state this account actually covers; without this, best-scored-first spent
+ * every batch call on NYC properties (they dominate the top of
+ * composite_score) that this account can never price, and returned 0 usable
+ * comps for all 30 tried. Pass `state: null` explicitly to go unscoped, or a
+ * different state string, once/if the account's coverage changes.
+ *
  * POST body: {
  *   property_id?: string,        // one property; default: batch mode
  *   limit?: number,               // batch mode only; default 10, max 50
+ *   state?: string | null,        // batch mode only; default 'NJ', null = unscoped
  *   lookback_months?: number,     // how recent a sold comp must be; default 12
  *   dry_run?: boolean,            // compute + preview, write nothing
  * }
@@ -73,6 +81,8 @@ const MIN_COMPS = 3;
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 10;
 const DEFAULT_LOOKBACK_MONTHS = 12;
+// Batch mode's default scope -- see the `stateFilter` comment at its use site.
+const DEFAULT_BATCH_STATE = 'NJ';
 
 // NOTE: also writes properties.arv_comp_method ('price_per_sqft' |
 // 'median_sold_price') alongside arv_source/arv_comp_count/arv_computed_at.
@@ -110,6 +120,13 @@ serve(async (req) => {
   const dryRun = body.dry_run === true;
   const lookbackMonths = Math.max(Number(body.lookback_months) || DEFAULT_LOOKBACK_MONTHS, 1);
   const limit = Math.min(Math.max(Number(body.limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+  // Defaults to the only state this SimplyRETS account was confirmed live to
+  // cover (Garden State MLS towns -- zero NYC coverage seen). Best-scored-
+  // first previously wasted every batch call on NYC properties, which
+  // dominate the top of composite_score but this account can never price.
+  // Pass state: null explicitly to go back to unscoped, once/if NY coverage
+  // is added to the account.
+  const stateFilter = body.state === null ? null : (typeof body.state === 'string' ? body.state : DEFAULT_BATCH_STATE);
 
   const supabase = getServiceClient();
 
@@ -125,13 +142,15 @@ serve(async (req) => {
       // Best-scored first -- same reasoning as skip-trace-leads: a limited
       // number of comp lookups should go to the leads that matter most, not
       // whichever rows happen to sort first.
-      const { data, error } = await supabase
+      let query = supabase
         .from('properties')
         .select('*')
         .is('quarantined_at', null)
         .or('estimated_arv.is.null,estimated_arv.eq.0')
         .not('zip', 'is', null)
-        .neq('zip', '')
+        .neq('zip', '');
+      if (stateFilter) query = query.eq('state', stateFilter);
+      const { data, error } = await query
         .order('composite_score', { ascending: false, nullsFirst: false })
         .limit(limit);
       if (error) return json({ success: false, error: error.message }, 500);
