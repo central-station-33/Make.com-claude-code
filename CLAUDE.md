@@ -56,6 +56,23 @@ Claude enrichment (`enrich-leads`) and skip tracing (`skip-trace-leads`).
 Unlisted segments default to tier 2. `notify-isa` is deliberately NOT ranked
 by segment — an already-enriched hot lead should reach an ISA on score.
 
+**Known limitation, accepted 2026-09-13:** the free data sources behind this
+pipeline (NYC HPD violations especially) surface mostly LLC/co-op/condo-owned
+buildings, not individual homeowners — confirmed live, only ~5% of properties
+and a similar share of isa_leads homeowner-segment rows have a real individual
+owner. Checked and ruled out as unfixable-for-free: NY/NJ lis
+pendens/foreclosure filings, the obvious better-targeted source, are not
+bulk-queryable for free in either state (ACRIS has no lis pendens document
+type at all — confirmed against its full 126-code list; it's filed with
+county court clerks, a separate system). Decision: keep the free sources as
+they are and rely on individual-vs-entity filtering instead of chasing a
+better source — `properties.owner_kind` (persisted, see
+`_shared/owner-classification.ts`) and the equivalent in-request filter in
+`skip-trace-leads` for `isa_leads`' homeowner segment (which has no persisted
+column to filter on). Revisit only if the user explicitly wants to add a paid
+foreclosure-data vendor as a new CLAUDE.md exception, the same way DataSkip
+was approved for skip tracing.
+
 ## Free Data Sources in Use
 - NYC Open Data (HPD violations, DOB, PLUTO, Evictions)
 - NJ MOD-IV via NJOGIS ArcGIS API

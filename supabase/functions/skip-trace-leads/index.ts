@@ -60,6 +60,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { getServiceClient } from '../_shared/supabase-client.ts';
 import { segmentTiers, unrankedSegmentFilter } from '../_shared/segment-priority.ts';
+import { classifyOwnerKind } from '../_shared/owner-classification.ts';
 
 const MAKE_SECRET        = Deno.env.get('MAKE_WEBHOOK_SECRET') ?? '';
 const DATASKIP_API_KEY   = Deno.env.get('DATASKIP_API_KEY') ?? '';
@@ -279,6 +280,17 @@ async function runTrace(
   } });
 }
 
+// homeowner is the one isa_leads segment where entity ownership actually
+// disqualifies a lead: a "homeowner" row that's really an LLC/co-op/condo
+// board isn't a homeowner lead at all, the same problem properties.owner_kind
+// exists to catch (see _shared/owner-classification.ts). Investor/athlete
+// leads keep whatever name they have -- an LLC is the expected shape of an
+// investor lead, not a defect. Found live: an isa_leads homeowner dry-run
+// batch was 17/20 entities ("Faithful Coo Inc", "557 Realty Associates Llc",
+// "116 Central Park South Condominium", ...) before this filter existed.
+const OVERFETCH_MULTIPLIER = 10;
+const OVERFETCH_CAP = 200;
+
 async function fetchIsaLeadRecords(
   supabase: ReturnType<typeof getServiceClient>,
   segment: string | null,
@@ -319,8 +331,21 @@ async function fetchIsaLeadRecords(
     }))
     .filter((r) => r.ownerName && r.address);
 
+  // Fetches a wider pool (isa_leads has no persisted owner_kind column to
+  // filter on server-side, unlike properties) and classifies in JS, same
+  // heuristic as properties.owner_kind.
+  const untracedHomeownerIndividuals = async (max: number) => {
+    const { data, error } = await untraced(Math.min(max * OVERFETCH_MULTIPLIER, OVERFETCH_CAP)).eq('segment', 'homeowner');
+    if (error) return { data: null, error };
+    const individuals = (data ?? []).filter((row) =>
+      classifyOwnerKind((row.full_name ?? row.entity_name ?? null) as string | null) === 'individual');
+    return { data: individuals.slice(0, max), error: null };
+  };
+
   if (segment) {
-    const { data, error } = await untraced(limit).eq('segment', segment);
+    const { data, error } = segment === 'homeowner'
+      ? await untracedHomeownerIndividuals(limit)
+      : await untraced(limit).eq('segment', segment);
     if (error) return { records: [], error: error.message };
     return { records: toRecords(data ?? []), error: null };
   }
@@ -330,11 +355,12 @@ async function fetchIsaLeadRecords(
     const remaining = limit - records.length;
     if (remaining <= 0) break;
 
-    const query = tier.segments
-      ? untraced(remaining).in('segment', tier.segments)
-      : untraced(remaining).not('segment', 'in', unrankedSegmentFilter());
-
-    const { data, error } = await query;
+    const isHomeownerOnlyTier = tier.segments?.length === 1 && tier.segments[0] === 'homeowner';
+    const { data, error } = isHomeownerOnlyTier
+      ? await untracedHomeownerIndividuals(remaining)
+      : await (tier.segments
+          ? untraced(remaining).in('segment', tier.segments)
+          : untraced(remaining).not('segment', 'in', unrankedSegmentFilter()));
     if (error) return { records: [], error: error.message };
     records = records.concat(toRecords(data ?? []));
   }
