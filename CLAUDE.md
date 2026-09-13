@@ -109,6 +109,26 @@ in one Make scenario run or one script — the gap between them is where the
 user's second approval belongs. `dry_run: true` is free and requires no
 approval at all.
 
+## Approved Exception: IDX/MLS Comps for ARV
+The user already holds a **SimplyRETS** (IDX/MLS data API) account —
+integrated via the `estimate-arv-comps` edge function to refine
+`properties.estimated_arv` from real recently-sold comparable listings,
+replacing the tax-assessed-value fallback the scoring engine otherwise uses.
+This is a different category of exception than skip tracing: it doesn't
+source leads (the "free sources only" rule for finding distressed properties
+still applies everywhere else) — it prices leads the free sources already
+found, using real market comps instead of a stale tax valuation. No spend-
+approval gate applies (SimplyRETS is a flat account cost, not billed per
+lookup the way DataSkip is), but it does need `SIMPLYRETS_API_KEY` /
+`SIMPLYRETS_API_SECRET` set as Supabase secrets — not set by any Claude
+Code session, since the account credentials are the user's own. Below
+`MIN_COMPS` (3) matching sold comps, `estimated_arv` is left untouched
+rather than written from a low-confidence estimate — see the function's
+header doc for the full method (median $/sqft, size-banded, lookback
+window). Its property_type → SimplyRETS `type` mapping is best-effort;
+properties whose type doesn't map confidently are skipped rather than
+searched unfiltered.
+
 ## Always Ask Before Building
 - Does this already exist in Make.com/Supabase/this repo's React dashboard?
 - Can Supabase Edge Functions handle this instead of a separate server?
