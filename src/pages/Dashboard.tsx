@@ -75,43 +75,71 @@ export default function DashboardPage() {
 
         {!isLoading && stats && (
           <>
-            {/* Summary stat tiles */}
+            {/* Summary stat tiles -- all lead into the full (unfiltered) leads
+                list, since InRangeLeads has no separate enrichment-status
+                filter to point Enriched/Pending at. */}
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-3 text-center">
+              <button
+                onClick={() => navigate('/inrange/leads')}
+                className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-3 text-center active:bg-gray-50 dark:active:bg-gray-800"
+              >
                 <Building2 className="h-5 w-5 text-gray-400 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-3 text-center">
+              </button>
+              <button
+                onClick={() => navigate('/inrange/leads')}
+                className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-3 text-center active:bg-gray-50 dark:active:bg-gray-800"
+              >
                 <TrendingUp className="h-5 w-5 text-green-500 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.enriched}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Enriched</p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-3 text-center">
+              </button>
+              <button
+                onClick={() => navigate('/inrange/leads')}
+                className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-3 text-center active:bg-gray-50 dark:active:bg-gray-800"
+              >
                 <Clock className="h-5 w-5 text-yellow-500 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pending}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Pending</p>
-              </div>
+              </button>
             </div>
 
-            {/* Tier breakdown */}
+            {/* Tier breakdown -- each row drills into that tier's leads */}
             <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
               <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">By Priority Tier</h2>
               <div className="space-y-2">
                 {stats.tiers.map(({ tier, count }) => {
                   const s = TIER_STYLES[tier];
                   return (
-                    <div key={tier} className={`flex items-center justify-between rounded-lg px-3 py-2 ${s.bg}`}>
+                    <button
+                      key={tier}
+                      onClick={() => navigate(`/inrange/leads?tier=${encodeURIComponent(tier)}`)}
+                      className={`w-full flex items-center justify-between rounded-lg px-3 py-2 ${s.bg} active:opacity-70`}
+                    >
                       <div className="flex items-center gap-2">
                         <span className={`h-2 w-2 rounded-full ${s.dot}`} />
                         <span className={`text-sm font-medium ${s.text}`}>{tier}</span>
                       </div>
-                      <span className={`text-sm font-bold ${s.text}`}>{count}</span>
-                    </div>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-sm font-bold ${s.text}`}>{count}</span>
+                        <ChevronRight className={`h-3.5 w-3.5 ${s.text}`} />
+                      </div>
+                    </button>
                   );
                 })}
               </div>
             </div>
+
+            {/* Always-present way out -- the "Top Tier 1 Leads" block below is
+                the only other nav on this page and only renders once leads
+                exist there, which left the page a dead end whenever it didn't. */}
+            <button
+              onClick={() => navigate('/inrange')}
+              className="w-full text-center text-sm font-medium text-blue-600 dark:text-blue-400 py-2"
+            >
+              Go to InRange hub →
+            </button>
 
             {/* Top Tier 1 leads */}
             {tier1Leads.length > 0 && (

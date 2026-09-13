@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
 import { InRangeLeadSummary, PriorityTier, LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_COLORS } from '@/types/inrange';
@@ -69,12 +69,25 @@ function StatusBadge({
 
 type ExtendedLead = InRangeLeadSummary & { status?: LeadStatus | null; last_contacted_at?: string | null };
 
+const VALID_TIERS: TierFilter[] = ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'];
+
 export default function InRangeLeads() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tierFilter, setTierFilter] = useState<TierFilter>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Dashboard tier tiles link here as /inrange/leads?tier=Tier%201 -- without
+  // reading it back out, that link always landed on the unfiltered "all"
+  // view, silently dropping the one piece of context the click carried.
+  const tierParam = searchParams.get('tier');
+  const initialTier: TierFilter = VALID_TIERS.includes(tierParam as TierFilter) ? (tierParam as TierFilter) : 'all';
+  const [tierFilter, setTierFilterState] = useState<TierFilter>(initialTier);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
+
+  const setTierFilter = (tier: TierFilter) => {
+    setTierFilterState(tier);
+    setSearchParams(tier === 'all' ? {} : { tier }, { replace: true });
+  };
 
   const { data: leads = [], isLoading, error, refetch } = useQuery({
     queryKey: ['inrange-leads', tierFilter],
@@ -130,6 +143,7 @@ export default function InRangeLeads() {
     { label: 'Tier 1', value: 'Tier 1' },
     { label: 'Tier 2', value: 'Tier 2' },
     { label: 'Tier 3', value: 'Tier 3' },
+    { label: 'Tier 4', value: 'Tier 4' },
   ];
 
   const STATUS_TABS: { label: string; value: StatusFilter }[] = [
