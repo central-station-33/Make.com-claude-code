@@ -13,14 +13,26 @@
  * provide them.
  *
  * Method: pull recently-SOLD listings from SimplyRETS matching the subject's
- * zip + property type + a size band (80-120% of its square footage), require
- * a sale within the lookback window, and take the MEDIAN $/sqft across those
- * comps -- median rather than mean because a handful of NYC/NJ comps easily
- * includes an outlier renovation or teardown, and one extreme shouldn't move
- * the estimate the way it would a mean. ARV = median $/sqft * subject sqft.
- * Below MIN_COMPS comps, the estimate is untrusted and nothing is written --
- * a wrong ARV actively corrupts deal_quality_score, so no comps is a better
+ * zip + property type, require a sale within the lookback window, and take
+ * the MEDIAN across comps -- median rather than mean because a handful of
+ * NYC/NJ comps easily includes an outlier renovation or teardown, and one
+ * extreme shouldn't move the estimate the way it would a mean. Below
+ * MIN_COMPS comps, the estimate is untrusted and nothing is written -- a
+ * wrong ARV actively corrupts deal_quality_score, so no comps is a better
  * outcome than a guess presented as data.
+ *
+ * Two sizing modes, chosen per subject:
+ *  - sqft known: size-band comps to 80-120% of the subject's square footage
+ *    and price by median $/sqft * subject sqft. This is the precise path.
+ *  - sqft unknown: comps by zip+type only (no size band), ARV = median
+ *    closePrice directly. Required for NJ -- confirmed live against NJOGIS's
+ *    full MOD-IV field list (43 fields) that it carries no building-area
+ *    field at all (CALC_ACRE/Shape__Area are LOT size, not building size),
+ *    so sqft is null for every NJ property this session found, and a
+ *    sqft-only implementation would silently never run for NJ at all -- the
+ *    one state this account's coverage actually reaches (confirmed live via
+ *    probe: NJ Garden State MLS towns, no NY coverage seen). Less precise
+ *    than the $/sqft path, so `arv_comp_method` records which one ran.
  *
  * property_type -> SimplyRETS `type` mapping is best-effort (see
  * mapPropertyType) and rows with no confident mapping are skipped entirely
@@ -61,6 +73,9 @@ const MIN_COMPS = 3;
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 10;
 const DEFAULT_LOOKBACK_MONTHS = 12;
+
+// NOTE: also writes properties.arv_comp_method ('price_per_sqft' |
+// 'median_sold_price') alongside arv_source/arv_comp_count/arv_computed_at.
 
 interface SimplyRetsListing {
   address?: { postalCode?: string };
@@ -127,24 +142,27 @@ serve(async (req) => {
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - lookbackMonths);
 
+    const median = (nums: number[]): number => {
+      const mid = Math.floor(nums.length / 2);
+      return nums.length % 2 === 0 ? (nums[mid - 1] + nums[mid]) / 2 : nums[mid];
+    };
+
     for (const subject of subjects) {
       const zip = String(subject.zip ?? '').trim();
       const sqft = Number(subject.square_footage) || 0;
       const mlsType = mapPropertyType(subject.property_type as string);
 
-      if (!zip || !sqft || !mlsType) {
-        results.push({ id: subject.id, skipped: true, reason: !zip ? 'no_zip' : !sqft ? 'no_sqft' : 'unmapped_property_type' });
+      if (!zip || !mlsType) {
+        results.push({ id: subject.id, skipped: true, reason: !zip ? 'no_zip' : 'unmapped_property_type' });
         continue;
       }
 
-      const params = new URLSearchParams({
-        status: 'Closed',
-        type: mlsType,
-        minarea: String(Math.round(sqft * (1 - SIZE_BAND))),
-        maxarea: String(Math.round(sqft * (1 + SIZE_BAND))),
-        limit: '50',
-      });
+      const params = new URLSearchParams({ status: 'Closed', type: mlsType, limit: '50' });
       params.append('postalCodes', zip);
+      if (sqft) {
+        params.set('minarea', String(Math.round(sqft * (1 - SIZE_BAND))));
+        params.set('maxarea', String(Math.round(sqft * (1 + SIZE_BAND))));
+      }
 
       const auth = btoa(`${SIMPLYRETS_KEY}:${SIMPLYRETS_SECRET}`);
       const res = await fetch(`${SIMPLYRETS_ENDPOINT}?${params}`, {
@@ -158,29 +176,43 @@ serve(async (req) => {
       }
 
       const listings = await res.json() as SimplyRetsListing[];
-      const pricesPerSqft = listings
-        .filter((l) => {
-          const closeDate = l.sales?.closeDate ? new Date(l.sales.closeDate) : null;
-          return l.sales?.closePrice && l.property?.area && closeDate && closeDate >= cutoff;
-        })
-        .map((l) => (l.sales!.closePrice as number) / (l.property!.area as number))
-        .sort((a, b) => a - b);
+      const sold = listings.filter((l) => {
+        const closeDate = l.sales?.closeDate ? new Date(l.sales.closeDate) : null;
+        return l.sales?.closePrice && closeDate && closeDate >= cutoff;
+      });
 
-      if (pricesPerSqft.length < MIN_COMPS) {
-        results.push({ id: subject.id, insufficient_comps: true, comps_found: pricesPerSqft.length });
-        continue;
+      let arv: number, compCount: number, method: string;
+
+      if (sqft) {
+        // Precise path: only comps with a known area count, priced per sqft.
+        const pricesPerSqft = sold
+          .filter((l) => l.property?.area)
+          .map((l) => (l.sales!.closePrice as number) / (l.property!.area as number))
+          .sort((a, b) => a - b);
+        if (pricesPerSqft.length < MIN_COMPS) {
+          results.push({ id: subject.id, insufficient_comps: true, comps_found: pricesPerSqft.length });
+          continue;
+        }
+        compCount = pricesPerSqft.length;
+        method = 'price_per_sqft';
+        arv = Math.round(median(pricesPerSqft) * sqft);
+      } else {
+        // NJ fallback (see header doc): no building-area field in NJOGIS
+        // MOD-IV, so price off the raw sold price directly -- coarser, but
+        // the only option this source can support at all.
+        const prices = sold.map((l) => l.sales!.closePrice as number).sort((a, b) => a - b);
+        if (prices.length < MIN_COMPS) {
+          results.push({ id: subject.id, insufficient_comps: true, comps_found: prices.length, no_sqft: true });
+          continue;
+        }
+        compCount = prices.length;
+        method = 'median_sold_price';
+        arv = Math.round(median(prices));
       }
 
-      const mid = Math.floor(pricesPerSqft.length / 2);
-      const medianPricePerSqft = pricesPerSqft.length % 2 === 0
-        ? (pricesPerSqft[mid - 1] + pricesPerSqft[mid]) / 2
-        : pricesPerSqft[mid];
-      const arv = Math.round(medianPricePerSqft * sqft);
-
       results.push({
-        id: subject.id, address: subject.address, sqft,
-        comp_count: pricesPerSqft.length, median_price_per_sqft: Math.round(medianPricePerSqft),
-        estimated_arv: arv, previous_estimated_arv: subject.estimated_arv,
+        id: subject.id, address: subject.address, sqft: sqft || null, method,
+        comp_count: compCount, estimated_arv: arv, previous_estimated_arv: subject.estimated_arv,
       });
     }
 
@@ -196,6 +228,7 @@ serve(async (req) => {
         estimated_arv: r.estimated_arv,
         arv_source: 'comps',
         arv_comp_count: r.comp_count,
+        arv_comp_method: r.method,
         arv_computed_at: new Date().toISOString(),
       }).eq('id', r.id);
       if (!error) written++;
