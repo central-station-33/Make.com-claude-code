@@ -79,23 +79,28 @@ was approved for skip tracing.
 - FEMA National Flood Hazard Layer
 - NJ municipal open data portals (Newark, Jersey City, Trenton)
 
-**Known bug, found 2026-09-13 (not yet fixed):** `properties.zip` is wrong for
-most NJ rows (`source = 'nj_mod_iv'`). Confirmed live against NJOGIS directly:
-its `ZIP_CODE` and `ZIP5` fields are identical and both hold the *owner's
-mailing zip*, not the property's — this MOD-IV layer is a tax-billing
-dataset and doesn't expose a property zip at all. `ingest-nj`
-(`toRawRecord`) maps `ZIP_CODE` straight to `zip`, so it's only coincidentally
-right when the owner lives at the property (small owner-occupied homes) and
-wrong whenever they don't — e.g. a Jersey City property showing zip 20260
-(Washington DC), 60523 (Oak Brook IL), or 19101 (Philadelphia) for an
-absentee/institutional owner. This lands hardest on exactly the properties
-`contact_likelihood_score` favors (out-of-state owner is worth +10 there), so
-it isn't a rare edge case for this pipeline's own priority rows. No fix
-applied yet — the correct one is a static NJ municipality→zip lookup (MOD-IV
-has no reliable per-parcel zip field to fall back to instead), which is a
-real chunk of work, not a one-line change. Affects anything keying off NJ
-`properties.zip`, discovered via `estimate-arv-comps` batch mode returning
-0/30 despite real SimplyRETS coverage in the same towns.
+**Bug found and fixed 2026-09-13/14:** `properties.zip` was wrong for most NJ
+rows (`source = 'nj_mod_iv'`). Confirmed live against NJOGIS directly: its
+`ZIP_CODE` and `ZIP5` fields are identical and both hold the *owner's mailing
+zip*, not the property's — this MOD-IV layer is a tax-billing dataset and
+doesn't expose a property zip at all. `ingest-nj` (`toRawRecord`) still maps
+`ZIP_CODE` straight to `zip` on new rows — so it's only coincidentally right
+when the owner lives at the property and wrong whenever they don't (e.g. a
+Jersey City property showing zip 20260/Washington DC for an absentee owner).
+This lands hardest on exactly the properties `contact_likelihood_score`
+favors (out-of-state owner is worth +10 there), so it wasn't a rare edge case
+for this pipeline's own priority rows.
+
+Fix: `backfill-nj-zip` corrects `properties.zip` via the free US Census
+Bureau geocoder (`_shared/geocode.ts`), address-level rather than
+municipality-level — Newark/Jersey City/Elizabeth alone span many zip codes
+each, so a coarse town→zip table would still be wrong for exactly the rows
+that matter most. It targets `zip_geocoded_at IS NULL`, so re-running it
+periodically after `ingest-nj` is the intended way newly-ingested NJ rows get
+corrected too (`ingest-nj` itself is untouched — geocoding inline would slow
+ingestion down). A geocoded zip outside NJ's own range (07xxx/08xxx) is
+rejected rather than written. Backfilled live 2026-09-14: all 450 existing NJ
+properties now carry a valid NJ zip (430 corrected, 20 already valid).
 
 ## Do NOT Suggest
 - Render.com, Railway, Fly.io or any separate hosting
