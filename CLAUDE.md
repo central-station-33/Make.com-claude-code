@@ -88,6 +88,26 @@ nothing to trace — this is an `ingest-nj` targeting problem (which
 municipalities/classes it pulls, and in what order), not something the
 skip-trace step can work around.
 
+**Reconfirmed 2026-09-14, after fixing the above targeting problem:**
+`ingest-nj` now excludes class-4C apartments, caps at 4 dwelling units, and
+accepts `min_value`/`min_years_owned` (default $500k/10yr, an equity proxy)
+and an `individual_owners_only` flag that pushes a non-blank-`OWNER_NAME`
+filter into the NJOGIS query itself. Ran against 5 fresh towns (one per
+Bergen/Hudson/Essex/Morris/Sussex county) with that flag on: **0 results in
+every town** — ArcGIS itself returned 0 features once blank owner names were
+excluded server-side, not a client-side filtering artifact. A full-table
+check confirms this isn't specific to those towns: across all 471 NJ
+properties now in the pipeline, `owner_kind` is 445 unknown (blank), 23
+entity, 3 null, **0 individual**. NJOGIS MOD-IV appears to essentially never
+populate an individual owner's name for NJ residential parcels, independent
+of municipality, class, value, or tenure. Decision: leave NJ ingestion as-is
+(the class-4C/dwell-cap/value/tenure filters are still correct and stay) and
+do not spend further NJOGIS calls chasing individual owners in NJ — treat
+this as confirmed, not merely likely. The only paths that could still
+surface individual NJ owners are the two already named above (a paid
+foreclosure-data vendor, or accepting entity-owned leads); work shifted to NY
+instead per user direction 2026-09-14.
+
 ## Free Data Sources in Use
 - NYC Open Data (HPD violations, DOB, PLUTO, Evictions)
 - NJ MOD-IV via NJOGIS ArcGIS API
