@@ -79,6 +79,29 @@ was approved for skip tracing.
 - FEMA National Flood Hazard Layer
 - NJ municipal open data portals (Newark, Jersey City, Trenton)
 
+**Bug found and fixed 2026-09-13/14:** `properties.zip` was wrong for most NJ
+rows (`source = 'nj_mod_iv'`). Confirmed live against NJOGIS directly: its
+`ZIP_CODE` and `ZIP5` fields are identical and both hold the *owner's mailing
+zip*, not the property's — this MOD-IV layer is a tax-billing dataset and
+doesn't expose a property zip at all. `ingest-nj` (`toRawRecord`) still maps
+`ZIP_CODE` straight to `zip` on new rows — so it's only coincidentally right
+when the owner lives at the property and wrong whenever they don't (e.g. a
+Jersey City property showing zip 20260/Washington DC for an absentee owner).
+This lands hardest on exactly the properties `contact_likelihood_score`
+favors (out-of-state owner is worth +10 there), so it wasn't a rare edge case
+for this pipeline's own priority rows.
+
+Fix: `backfill-nj-zip` corrects `properties.zip` via the free US Census
+Bureau geocoder (`_shared/geocode.ts`), address-level rather than
+municipality-level — Newark/Jersey City/Elizabeth alone span many zip codes
+each, so a coarse town→zip table would still be wrong for exactly the rows
+that matter most. It targets `zip_geocoded_at IS NULL`, so re-running it
+periodically after `ingest-nj` is the intended way newly-ingested NJ rows get
+corrected too (`ingest-nj` itself is untouched — geocoding inline would slow
+ingestion down). A geocoded zip outside NJ's own range (07xxx/08xxx) is
+rejected rather than written. Backfilled live 2026-09-14: all 450 existing NJ
+properties now carry a valid NJ zip (430 corrected, 20 already valid).
+
 ## Do NOT Suggest
 - Render.com, Railway, Fly.io or any separate hosting
 - Paid data sources (PropStream, BatchLeads, etc.) — **except** paid skip
@@ -108,6 +131,26 @@ is the only call that spends money. Never chain propose and confirm together
 in one Make scenario run or one script — the gap between them is where the
 user's second approval belongs. `dry_run: true` is free and requires no
 approval at all.
+
+## Approved Exception: IDX/MLS Comps for ARV
+The user already holds a **SimplyRETS** (IDX/MLS data API) account —
+integrated via the `estimate-arv-comps` edge function to refine
+`properties.estimated_arv` from real recently-sold comparable listings,
+replacing the tax-assessed-value fallback the scoring engine otherwise uses.
+This is a different category of exception than skip tracing: it doesn't
+source leads (the "free sources only" rule for finding distressed properties
+still applies everywhere else) — it prices leads the free sources already
+found, using real market comps instead of a stale tax valuation. No spend-
+approval gate applies (SimplyRETS is a flat account cost, not billed per
+lookup the way DataSkip is), but it does need `SIMPLYRETS_API_KEY` /
+`SIMPLYRETS_API_SECRET` set as Supabase secrets — not set by any Claude
+Code session, since the account credentials are the user's own. Below
+`MIN_COMPS` (3) matching sold comps, `estimated_arv` is left untouched
+rather than written from a low-confidence estimate — see the function's
+header doc for the full method (median $/sqft, size-banded, lookback
+window). Its property_type → SimplyRETS `type` mapping is best-effort;
+properties whose type doesn't map confidently are skipped rather than
+searched unfiltered.
 
 ## Always Ask Before Building
 - Does this already exist in Make.com/Supabase/this repo's React dashboard?

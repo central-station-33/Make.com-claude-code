@@ -7,6 +7,7 @@ import { Loader2, MapPin, AlertTriangle, Search, ChevronRight, User } from 'luci
 
 type TierFilter = 'all' | PriorityTier;
 type StatusFilter = 'all' | LeadStatus;
+type StateFilter = 'all' | 'NY' | 'NJ';
 
 const TIER_COLORS: Record<PriorityTier, string> = {
   'Tier 1': 'bg-red-100 text-red-700',
@@ -70,27 +71,44 @@ function StatusBadge({
 type ExtendedLead = InRangeLeadSummary & { status?: LeadStatus | null; last_contacted_at?: string | null };
 
 const VALID_TIERS: TierFilter[] = ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'];
+const VALID_STATES: StateFilter[] = ['NY', 'NJ'];
 
 export default function InRangeLeads() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  // Dashboard tier tiles link here as /inrange/leads?tier=Tier%201 -- without
-  // reading it back out, that link always landed on the unfiltered "all"
-  // view, silently dropping the one piece of context the click carried.
+  // Dashboard tier/state tiles link here as /inrange/leads?tier=Tier%201 or
+  // ?state=NY -- without reading them back out, those links always landed on
+  // the unfiltered "all" view, silently dropping the context the click carried.
   const tierParam = searchParams.get('tier');
   const initialTier: TierFilter = VALID_TIERS.includes(tierParam as TierFilter) ? (tierParam as TierFilter) : 'all';
   const [tierFilter, setTierFilterState] = useState<TierFilter>(initialTier);
+  const stateParam = searchParams.get('state');
+  const initialState: StateFilter = VALID_STATES.includes(stateParam as StateFilter) ? (stateParam as StateFilter) : 'all';
+  const [stateFilter, setStateFilterState] = useState<StateFilter>(initialState);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
 
   const setTierFilter = (tier: TierFilter) => {
     setTierFilterState(tier);
-    setSearchParams(tier === 'all' ? {} : { tier }, { replace: true });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      tier === 'all' ? next.delete('tier') : next.set('tier', tier);
+      return next;
+    }, { replace: true });
+  };
+
+  const setStateFilter = (state: StateFilter) => {
+    setStateFilterState(state);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      state === 'all' ? next.delete('state') : next.set('state', state);
+      return next;
+    }, { replace: true });
   };
 
   const { data: leads = [], isLoading, error, refetch } = useQuery({
-    queryKey: ['inrange-leads', tierFilter],
+    queryKey: ['inrange-leads', tierFilter, stateFilter],
     queryFn: async () => {
       let q = inrange
         .from('properties')
@@ -99,6 +117,7 @@ export default function InRangeLeads() {
         .limit(200);
 
       if (tierFilter !== 'all') q = q.eq('priority_tier', tierFilter);
+      if (stateFilter !== 'all') q = q.eq('state', stateFilter);
 
       const { data, error } = await q;
       if (error) throw error;
@@ -116,26 +135,28 @@ export default function InRangeLeads() {
       if (error) throw error;
     },
     onMutate: async ({ id, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['inrange-leads', tierFilter] });
-      const prev = queryClient.getQueryData<ExtendedLead[]>(['inrange-leads', tierFilter]);
-      queryClient.setQueryData<ExtendedLead[]>(['inrange-leads', tierFilter], (old) =>
+      const key = ['inrange-leads', tierFilter, stateFilter];
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<ExtendedLead[]>(key);
+      queryClient.setQueryData<ExtendedLead[]>(key, (old) =>
         old?.map((l) => l.id === id ? { ...l, status } : l) ?? []
       );
       return { prev };
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['inrange-leads', tierFilter], ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(['inrange-leads', tierFilter, stateFilter], ctx.prev);
     },
   });
 
   const filtered = leads.filter((l) => {
     const matchesTier = tierFilter === 'all' || l.priority_tier === tierFilter;
+    const matchesState = stateFilter === 'all' || l.state === stateFilter;
     const matchesStatus = statusFilter === 'all' || (l.status ?? 'new_lead') === statusFilter;
     const matchesSearch = !search ||
       l.address.toLowerCase().includes(search.toLowerCase()) ||
       l.city.toLowerCase().includes(search.toLowerCase()) ||
       (l.owner_name ?? '').toLowerCase().includes(search.toLowerCase());
-    return matchesTier && matchesStatus && matchesSearch;
+    return matchesTier && matchesState && matchesStatus && matchesSearch;
   });
 
   const TIER_TABS: { label: string; value: TierFilter }[] = [
@@ -144,6 +165,12 @@ export default function InRangeLeads() {
     { label: 'Tier 2', value: 'Tier 2' },
     { label: 'Tier 3', value: 'Tier 3' },
     { label: 'Tier 4', value: 'Tier 4' },
+  ];
+
+  const STATE_TABS: { label: string; value: StateFilter }[] = [
+    { label: 'All States', value: 'all' },
+    { label: 'NY', value: 'NY' },
+    { label: 'NJ', value: 'NJ' },
   ];
 
   const STATUS_TABS: { label: string; value: StatusFilter }[] = [
@@ -180,6 +207,25 @@ export default function InRangeLeads() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 border border-transparent rounded-lg focus:outline-none focus:border-gray-300 dark:focus:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400"
             />
+          </div>
+
+          {/* State filter -- NY and NJ are structurally different pipelines
+              right now (free-source mix, MLS comps coverage, owner mix), so
+              this is kept as its own row rather than folded into search. */}
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {STATE_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setStateFilter(tab.value)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  stateFilter === tab.value
+                    ? 'bg-teal-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           {/* Tier filter */}
