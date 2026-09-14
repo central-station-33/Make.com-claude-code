@@ -52,6 +52,7 @@
  *   limit?: number,                     // default 5, max 100
  *   min_bant_score?: number,            // isa_leads only; 0 = no filter
  *   individuals_only?: boolean,         // properties only; see fetchPropertyRecords
+ *   state?: string,                     // properties only; e.g. 'NJ' -- see fetchPropertyRecords
  *   dry_run?: boolean,                  // resolve targets, call nothing, spend nothing, no token
  *   confirm_token?: string,             // from a prior propose call; presence = "run it"
  * }
@@ -145,10 +146,11 @@ serve(async (req) => {
   const limit    = Math.min(Math.max(Number(body.limit) || DEFAULT_BATCH, 1), MAX_BATCH);
   const minScore = Math.max(Number(body.min_bant_score) || 0, 0);
   const individualsOnly = table === 'properties' && body.individuals_only === true;
+  const stateFilter = table === 'properties' && typeof body.state === 'string' ? body.state.toUpperCase() : null;
   const dryRun   = body.dry_run === true;
 
   const { records, error: fetchError } = table === 'properties'
-    ? await fetchPropertyRecords(supabase, limit, individualsOnly)
+    ? await fetchPropertyRecords(supabase, limit, individualsOnly, stateFilter)
     : await fetchIsaLeadRecords(supabase, segment, limit, minScore);
 
   if (fetchError) {
@@ -372,6 +374,7 @@ async function fetchPropertyRecords(
   supabase: ReturnType<typeof getServiceClient>,
   limit: number,
   individualsOnly: boolean,
+  stateFilter: string | null,
 ): Promise<{ records: TraceRecord[]; error: string | null }> {
   let query = supabase
     .from('properties')
@@ -401,6 +404,11 @@ async function fetchPropertyRecords(
   // from an individuals-only batch rather than reclassified here again; run
   // rescore-properties to backfill it.
   if (individualsOnly) query = query.eq('owner_kind', 'individual');
+  // NY properties dominate the top of composite_score (richer free distress
+  // signal than NJ MOD-IV), so an unscoped batch silently starves NJ of any
+  // share of a limited batch -- this makes "just NJ" or "just NY" explicit
+  // rather than a side effect of ordering.
+  if (stateFilter) query = query.eq('state', stateFilter);
 
   const { data, error } = await query;
   if (error) return { records: [], error: error.message };
