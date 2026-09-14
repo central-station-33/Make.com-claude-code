@@ -96,6 +96,7 @@ const fetchMunicipality = async (
   munname: string,
   perMuni: number,
   minValue: number,
+  individualOwnersOnly: boolean,
   errors: string[]
 ): Promise<Record<string, unknown>[]> => {
   try {
@@ -103,8 +104,16 @@ const fetchMunicipality = async (
     // sample rows return it as a JSON number, not a string), unlike some
     // fields elsewhere in this pipeline that only look numeric. Filtering it
     // server-side, unlike years-owned below, is safe and cuts wasted fetches.
+    // Same for the blank-OWNER_NAME exclusion below when individualOwnersOnly
+    // is set -- OWNER_NAME itself (not the LLC-shape check, which still has
+    // to happen client-side against the full name text) is a plain text
+    // field, so this cuts the single biggest source of waste (blank owner
+    // rows -- see RESIDENTIAL_CLASSES comment / CLAUDE.md) before it's even
+    // fetched, rather than fetching then discarding client-side.
+    const where = `MUN_NAME LIKE '%${munname}%' AND PROP_CLASS IN (${RESIDENTIAL_CLASSES}) AND NET_VALUE >= ${minValue}`
+      + (individualOwnersOnly ? ` AND OWNER_NAME IS NOT NULL AND OWNER_NAME <> ''` : "");
     const params = new URLSearchParams({
-      where: `MUN_NAME LIKE '%${munname}%' AND PROP_CLASS IN (${RESIDENTIAL_CLASSES}) AND NET_VALUE >= ${minValue}`,
+      where,
       outFields: "PROP_LOC,MUN_NAME,ZIP_CODE,PROP_CLASS,LAST_YR_TX,NET_VALUE,OWNER_NAME,FAC_NAME,ST_ADDRESS,CITY_STATE,DEED_DATE,SALE_PRICE,COUNTY,DWELL",
       orderByFields: "LAST_YR_TX DESC",
       resultRecordCount: String(perMuni),
@@ -238,20 +247,21 @@ Deno.serve(async (req) => {
       return ok(diag, "Connectivity test");
     }
 
-    const perMuni       = Math.min(Number(body.per_municipality || 75), 200);
-    const targets       = (body.municipalities as typeof DEFAULT_TARGETS) || DEFAULT_TARGETS;
-    const minValue      = Math.max(Number(body.min_value) || DEFAULT_MIN_VALUE, 0);
-    const minYearsOwned = Math.max(Number(body.min_years_owned) || DEFAULT_MIN_YEARS_OWNED, 0);
+    const perMuni             = Math.min(Number(body.per_municipality || 75), 200);
+    const targets              = (body.municipalities as typeof DEFAULT_TARGETS) || DEFAULT_TARGETS;
+    const minValue             = Math.max(Number(body.min_value) || DEFAULT_MIN_VALUE, 0);
+    const minYearsOwned        = Math.max(Number(body.min_years_owned) || DEFAULT_MIN_YEARS_OWNED, 0);
+    const individualOwnersOnly = body.individual_owners_only === true;
 
     const results = {
       fetched: 0, inserted: 0, duplicates: 0,
-      skipped_over_dwell_cap: 0, skipped_under_years_owned: 0,
+      skipped_over_dwell_cap: 0, skipped_under_years_owned: 0, skipped_non_individual_owner: 0,
       by_municipality: {} as Record<string, number>,
       errors: [] as string[],
     };
 
     for (const { munname, county } of targets) {
-      const attrs = await fetchMunicipality(munname, perMuni, minValue, results.errors);
+      const attrs = await fetchMunicipality(munname, perMuni, minValue, individualOwnersOnly, results.errors);
       let muniCount = 0;
 
       for (const attr of attrs) {
@@ -278,8 +288,18 @@ Deno.serve(async (req) => {
         }
 
         const rawData = toRawRecord(attr, county);
-        const addr    = String(rawData.address || "").toUpperCase().trim();
-        const zip     = String(rawData.zip     || "").trim();
+
+        // The ArcGIS query already drops blank OWNER_NAME rows when this flag
+        // is set (see fetchMunicipality); this catches the LLC-shaped names
+        // that made it through, since that check needs the full name text
+        // and isn't expressible in the ArcGIS $where clause.
+        if (individualOwnersOnly && rawData.owner_type !== "individual") {
+          results.skipped_non_individual_owner++;
+          continue;
+        }
+
+        const addr = String(rawData.address || "").toUpperCase().trim();
+        const zip  = String(rawData.zip     || "").trim();
 
         if (!addr) continue;
 
