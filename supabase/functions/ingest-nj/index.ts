@@ -38,6 +38,14 @@ const RESIDENTIAL_CLASSES = "'2','15A','15B','15C'";
 // drop legitimate rows over a data-completeness gap, not a size problem).
 const MAX_DWELLING_UNITS = 4;
 
+// Long tenure + real equity: an owner who has held the property 10+ years at
+// $500k+ almost certainly has substantial equity (NJ home values didn't stay
+// flat over a decade), which is exactly what makes a distress signal into a
+// workable deal rather than a house they'd walk away from underwater.
+// Overridable per call (min_years_owned, min_value in the request body).
+const DEFAULT_MIN_YEARS_OWNED = 10;
+const DEFAULT_MIN_VALUE = 500_000;
+
 // 1 -> single_family, 2/3/4 -> duplex/triplex/fourplex -- matches
 // scoring.ts's TYPE_PTS exactly, and is a real per-parcel unit count rather
 // than the coarse, sometimes-wrong PROP_CLASS assumption.
@@ -87,11 +95,16 @@ const yearsOwnedFrom = (deedDate: unknown): number => {
 const fetchMunicipality = async (
   munname: string,
   perMuni: number,
+  minValue: number,
   errors: string[]
 ): Promise<Record<string, unknown>[]> => {
   try {
+    // NET_VALUE is a genuine numeric field in this layer (confirmed live --
+    // sample rows return it as a JSON number, not a string), unlike some
+    // fields elsewhere in this pipeline that only look numeric. Filtering it
+    // server-side, unlike years-owned below, is safe and cuts wasted fetches.
     const params = new URLSearchParams({
-      where: `MUN_NAME LIKE '%${munname}%' AND PROP_CLASS IN (${RESIDENTIAL_CLASSES})`,
+      where: `MUN_NAME LIKE '%${munname}%' AND PROP_CLASS IN (${RESIDENTIAL_CLASSES}) AND NET_VALUE >= ${minValue}`,
       outFields: "PROP_LOC,MUN_NAME,ZIP_CODE,PROP_CLASS,LAST_YR_TX,NET_VALUE,OWNER_NAME,FAC_NAME,ST_ADDRESS,CITY_STATE,DEED_DATE,SALE_PRICE,COUNTY,DWELL",
       orderByFields: "LAST_YR_TX DESC",
       resultRecordCount: String(perMuni),
@@ -225,17 +238,20 @@ Deno.serve(async (req) => {
       return ok(diag, "Connectivity test");
     }
 
-    const perMuni   = Math.min(Number(body.per_municipality || 75), 200);
-    const targets   = (body.municipalities as typeof DEFAULT_TARGETS) || DEFAULT_TARGETS;
+    const perMuni       = Math.min(Number(body.per_municipality || 75), 200);
+    const targets       = (body.municipalities as typeof DEFAULT_TARGETS) || DEFAULT_TARGETS;
+    const minValue      = Math.max(Number(body.min_value) || DEFAULT_MIN_VALUE, 0);
+    const minYearsOwned = Math.max(Number(body.min_years_owned) || DEFAULT_MIN_YEARS_OWNED, 0);
 
     const results = {
-      fetched: 0, inserted: 0, duplicates: 0, skipped_over_dwell_cap: 0,
+      fetched: 0, inserted: 0, duplicates: 0,
+      skipped_over_dwell_cap: 0, skipped_under_years_owned: 0,
       by_municipality: {} as Record<string, number>,
       errors: [] as string[],
     };
 
     for (const { munname, county } of targets) {
-      const attrs = await fetchMunicipality(munname, perMuni, results.errors);
+      const attrs = await fetchMunicipality(munname, perMuni, minValue, results.errors);
       let muniCount = 0;
 
       for (const attr of attrs) {
@@ -248,6 +264,16 @@ Deno.serve(async (req) => {
         const dwellNum = Number(attr.DWELL);
         if (Number.isFinite(dwellNum) && dwellNum > MAX_DWELLING_UNITS) {
           results.skipped_over_dwell_cap++;
+          continue;
+        }
+
+        // DEED_DATE's format varies (YYYYMM/YYYYMMDD/epoch ms -- see
+        // yearsOwnedFrom), so unlike NET_VALUE above this can't be pushed
+        // into the ArcGIS $where clause; computed client-side instead. A
+        // record with no parseable DEED_DATE yields years=0 and is excluded
+        // here rather than assumed to meet the tenure bar.
+        if (yearsOwnedFrom(attr.DEED_DATE) < minYearsOwned) {
+          results.skipped_under_years_owned++;
           continue;
         }
 
