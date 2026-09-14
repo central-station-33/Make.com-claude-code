@@ -4,12 +4,23 @@ import { inrange } from '@/integrations/supabase/inrange';
 import { Loader2, MapPin, ChevronRight, AlertTriangle, TrendingUp, Building2, Clock } from 'lucide-react';
 
 type TierCount = { tier: string; count: number };
+type StateCount = { state: string; count: number };
 
 const TIER_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
   'Tier 1': { bg: 'bg-red-50 dark:bg-red-950', text: 'text-red-700 dark:text-red-300', dot: 'bg-red-500' },
   'Tier 2': { bg: 'bg-orange-50 dark:bg-orange-950', text: 'text-orange-700 dark:text-orange-300', dot: 'bg-orange-500' },
   'Tier 3': { bg: 'bg-yellow-50 dark:bg-yellow-950', text: 'text-yellow-700 dark:text-yellow-300', dot: 'bg-yellow-500' },
   'Tier 4': { bg: 'bg-gray-50 dark:bg-gray-900', text: 'text-gray-600 dark:text-gray-400', dot: 'bg-gray-400' },
+};
+
+// NY and NJ are structurally very different pipelines right now (free-source
+// mix, MLS comps coverage, owner mix) -- a single combined count obscures
+// that, so the dashboard breaks it out explicitly rather than lumping every
+// property into one number.
+const STATE_LABELS: Record<string, string> = { NY: 'New York', NJ: 'New Jersey' };
+const STATE_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
+  NY: { bg: 'bg-blue-50 dark:bg-blue-950', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+  NJ: { bg: 'bg-teal-50 dark:bg-teal-950', text: 'text-teal-700 dark:text-teal-300', dot: 'bg-teal-500' },
 };
 
 export default function DashboardPage() {
@@ -20,7 +31,7 @@ export default function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await inrange
         .from('properties')
-        .select('priority_tier, enrichment_status, composite_score');
+        .select('priority_tier, enrichment_status, composite_score, state');
       if (error) throw error;
 
       const rows = data ?? [];
@@ -29,13 +40,27 @@ export default function DashboardPage() {
       const pending = rows.filter((r) => r.enrichment_status === 'pending').length;
 
       const tierMap: Record<string, number> = {};
+      const stateMap: Record<string, number> = {};
       for (const r of rows) {
         if (r.priority_tier) tierMap[r.priority_tier] = (tierMap[r.priority_tier] ?? 0) + 1;
+        const st = (r.state ?? '').trim().toUpperCase();
+        if (st) stateMap[st] = (stateMap[st] ?? 0) + 1;
       }
       const tiers: TierCount[] = ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4']
         .map((t) => ({ tier: t, count: tierMap[t] ?? 0 }));
 
-      return { total, enriched, pending, tiers };
+      // NY/NJ first and always shown (even at 0), since those are this
+      // pipeline's two target markets; anything else found is appended so a
+      // stray/bad state value is visible rather than silently dropped.
+      const knownStates = ['NY', 'NJ'];
+      const states: StateCount[] = [
+        ...knownStates.map((s) => ({ state: s, count: stateMap[s] ?? 0 })),
+        ...Object.entries(stateMap)
+          .filter(([s]) => !knownStates.includes(s))
+          .map(([state, count]) => ({ state, count })),
+      ];
+
+      return { total, enriched, pending, tiers, states };
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -103,6 +128,34 @@ export default function DashboardPage() {
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pending}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Pending</p>
               </button>
+            </div>
+
+            {/* State breakdown -- NY and NJ are structurally different
+                pipelines right now (see STATE_LABELS comment); each row
+                drills into that state's leads */}
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">By State</h2>
+              <div className="space-y-2">
+                {stats.states.map(({ state, count }) => {
+                  const s = STATE_STYLES[state] ?? TIER_STYLES['Tier 4'];
+                  return (
+                    <button
+                      key={state}
+                      onClick={() => navigate(`/inrange/leads?state=${encodeURIComponent(state)}`)}
+                      className={`w-full flex items-center justify-between rounded-lg px-3 py-2 ${s.bg} active:opacity-70`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                        <span className={`text-sm font-medium ${s.text}`}>{STATE_LABELS[state] ?? state}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-sm font-bold ${s.text}`}>{count}</span>
+                        <ChevronRight className={`h-3.5 w-3.5 ${s.text}`} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Tier breakdown -- each row drills into that tier's leads */}
