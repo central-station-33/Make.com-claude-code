@@ -15,13 +15,41 @@ const DEFAULT_TARGETS = [
   { munname: "TRENTON",     county: "MERCER" },
 ];
 
+// Fallback only -- propertyTypeFromDwell (actual per-parcel unit count) takes
+// precedence whenever DWELL is present; this is used just for the rare row
+// missing it.
 const NJ_CLASS_MAP: Record<string, string> = {
-  "2": "single_family", "4C": "apartment",
+  "2": "single_family",
   "15A": "single_family", "15B": "multifamily", "15C": "condo",
 };
 
-// Residential PROP_CLASS values
-const RESIDENTIAL_CLASSES = "'2','4C','15A','15B','15C'";
+// Residential PROP_CLASS values -- deliberately excludes '4C', NJ's official
+// class for "Apartments, 5+ units": confirmed live this was ~96% of NJ's
+// ingested inventory, and 415 of those 434 rows have a BLANK owner name in
+// NJOGIS MOD-IV itself (not an LLC to filter -- nothing at all). That also
+// starved the pipeline of the single/small-multi-family homes it actually
+// wants -- only 14 existed in the whole dataset. See CLAUDE.md.
+const RESIDENTIAL_CLASSES = "'2','15A','15B','15C'";
+
+// Hard cap even with 4C excluded -- DWELL is the parcel's actual dwelling
+// unit count, more reliable than trusting every class code's assumed
+// meaning. A record with no DWELL value at all is kept (most single-family
+// homes report DWELL 1, but treating "missing" as "exclude" would silently
+// drop legitimate rows over a data-completeness gap, not a size problem).
+const MAX_DWELLING_UNITS = 4;
+
+// 1 -> single_family, 2/3/4 -> duplex/triplex/fourplex -- matches
+// scoring.ts's TYPE_PTS exactly, and is a real per-parcel unit count rather
+// than the coarse, sometimes-wrong PROP_CLASS assumption.
+function propertyTypeFromDwell(dwell: unknown): string | null {
+  const n = Number(dwell);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (n === 1) return "single_family";
+  if (n === 2) return "duplex";
+  if (n === 3) return "triplex";
+  if (n === 4) return "fourplex";
+  return null; // 5+ shouldn't occur with 4C excluded; don't guess if it does
+}
 
 const LLC_RE = /\b(LLC|L\.L\.C|INC|CORP|LP|LTD|TRUST|ESTATE|HOLDING|PROP|ASSOC|PARTNER|REALTY|GROUP|CAPITAL)\b/i;
 
@@ -64,7 +92,7 @@ const fetchMunicipality = async (
   try {
     const params = new URLSearchParams({
       where: `MUN_NAME LIKE '%${munname}%' AND PROP_CLASS IN (${RESIDENTIAL_CLASSES})`,
-      outFields: "PROP_LOC,MUN_NAME,ZIP_CODE,PROP_CLASS,LAST_YR_TX,NET_VALUE,OWNER_NAME,FAC_NAME,ST_ADDRESS,CITY_STATE,DEED_DATE,SALE_PRICE,COUNTY",
+      outFields: "PROP_LOC,MUN_NAME,ZIP_CODE,PROP_CLASS,LAST_YR_TX,NET_VALUE,OWNER_NAME,FAC_NAME,ST_ADDRESS,CITY_STATE,DEED_DATE,SALE_PRICE,COUNTY,DWELL",
       orderByFields: "LAST_YR_TX DESC",
       resultRecordCount: String(perMuni),
       f: "json",
@@ -117,7 +145,8 @@ const toRawRecord = (
     state:          "NJ",
     zip:            String(attr.ZIP_CODE  || "").trim(),
     county,
-    property_type:  NJ_CLASS_MAP[String(attr.PROP_CLASS || "")] || "unknown",
+    property_type:  propertyTypeFromDwell(attr.DWELL) ?? NJ_CLASS_MAP[String(attr.PROP_CLASS || "")] ?? "unknown",
+    dwelling_units: Number.isFinite(Number(attr.DWELL)) && Number(attr.DWELL) > 0 ? Number(attr.DWELL) : null,
     assessed_value: Number(attr.NET_VALUE || 0) || null,
     estimated_arv:  null,
     delinquent_amount: 0,
@@ -200,7 +229,7 @@ Deno.serve(async (req) => {
     const targets   = (body.municipalities as typeof DEFAULT_TARGETS) || DEFAULT_TARGETS;
 
     const results = {
-      fetched: 0, inserted: 0, duplicates: 0,
+      fetched: 0, inserted: 0, duplicates: 0, skipped_over_dwell_cap: 0,
       by_municipality: {} as Record<string, number>,
       errors: [] as string[],
     };
@@ -211,6 +240,16 @@ Deno.serve(async (req) => {
 
       for (const attr of attrs) {
         if (!attr.PROP_LOC) continue;
+
+        // Belt-and-suspenders on top of excluding class 4C: don't trust the
+        // class code's assumed meaning alone when a real per-parcel unit
+        // count is available and says otherwise. A record with no DWELL at
+        // all still passes -- see MAX_DWELLING_UNITS comment.
+        const dwellNum = Number(attr.DWELL);
+        if (Number.isFinite(dwellNum) && dwellNum > MAX_DWELLING_UNITS) {
+          results.skipped_over_dwell_cap++;
+          continue;
+        }
 
         const rawData = toRawRecord(attr, county);
         const addr    = String(rawData.address || "").toUpperCase().trim();
