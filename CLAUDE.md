@@ -73,6 +73,21 @@ column to filter on). Revisit only if the user explicitly wants to add a paid
 foreclosure-data vendor as a new CLAUDE.md exception, the same way DataSkip
 was approved for skip tracing.
 
+**NJ specifically, found 2026-09-14: zero individually-owned properties are
+currently skip-traceable at all.** 96% of NJ properties (434/450) are large
+apartment buildings (`ingest-nj`'s `DEFAULT_TARGETS` are big cities, and its
+query orders every property class by `LAST_YR_TX DESC` — the highest-tax
+class-4C apartment buildings crowd out the handful of class-2 single-family
+parcels in every municipality). Of those 434, 415 have a **blank owner name**
+in NJOGIS MOD-IV itself (confirmed live) — not an LLC name to filter out,
+just nothing. Only 22 NJ properties have any owner name at all, and all 22
+classify as entities. Only 14 single-family NJ properties exist in the whole
+dataset. `skip-trace-leads` now accepts a `state` param (properties table)
+to scope a batch to NJ or NY, but scoping to NJ alone currently returns
+nothing to trace — this is an `ingest-nj` targeting problem (which
+municipalities/classes it pulls, and in what order), not something the
+skip-trace step can work around.
+
 ## Free Data Sources in Use
 - NYC Open Data (HPD violations, DOB, PLUTO, Evictions)
 - NJ MOD-IV via NJOGIS ArcGIS API
