@@ -18,6 +18,20 @@
  * every row it touches, so this is also how existing rows pick up that
  * classification after it was added.
  *
+ * Also syncs enrichment_status with the recomputed tier. process-raw-
+ * properties sets enrichment_status once, at ingest time, from whatever
+ * priority_tier the row got THEN -- it never revisits it. Without this sync,
+ * a row promoted into Tier 1 by a later recalibration (like the 2026-09-12
+ * cut change) stays enrichment_status='skipped' forever, since nothing else
+ * ever looks at it again: confirmed live, all 444 NY properties showed
+ * enrichment_status='skipped' despite 49 being Tier 1 under the current
+ * cuts, because none of them were Tier 1 under the old 80/60/40 cuts at
+ * ingest time. Only flips 'skipped'->'pending' (promoted into Tier 1) and
+ * 'pending'->'skipped' (demoted out, so the Tier-1-only AI gate in
+ * enrich-pending doesn't spend on it) -- 'complete', 'processing' and
+ * 'failed' are left alone regardless of tier changes, so a re-run never
+ * re-queues or discards a row that already went through enrichment.
+ *
  * POST body: { dry_run?: boolean, limit?: number }
  *   dry_run: compute and report the distribution, write nothing.
  */
@@ -53,6 +67,8 @@ Deno.serve(async (req) => {
   let read = 0;
   let written = 0;
   let changed = 0;
+  let promotedToPending = 0;
+  let demotedToSkipped = 0;
 
   try {
     for (let from = 0; ; from += PAGE) {
@@ -82,8 +98,19 @@ Deno.serve(async (req) => {
         const k = String(scores.composite_score);
         scoreHistogram[k] = (scoreHistogram[k] ?? 0) + 1;
 
+        const isTier1 = scores.priority_tier === 'Tier 1';
+        const currentStatus = row.enrichment_status as string | null;
+        let enrichmentStatus = currentStatus;
+        if (isTier1 && currentStatus === 'skipped') {
+          enrichmentStatus = 'pending';
+          promotedToPending++;
+        } else if (!isTier1 && currentStatus === 'pending') {
+          enrichmentStatus = 'skipped';
+          demotedToSkipped++;
+        }
+
         if (row.composite_score !== scores.composite_score || row.priority_tier !== scores.priority_tier
-          || row.owner_kind !== ownerKind) {
+          || row.owner_kind !== ownerKind || enrichmentStatus !== currentStatus) {
           changed++;
         }
         if (dryRun) continue;
@@ -99,6 +126,7 @@ Deno.serve(async (req) => {
             priority_tier: scores.priority_tier,
             deal_type: scores.deal_type,
             owner_kind: ownerKind,
+            enrichment_status: enrichmentStatus,
           })
           .eq('id', row.id);
 
@@ -118,6 +146,8 @@ Deno.serve(async (req) => {
         read,
         written,
         changed,
+        promoted_to_pending: promotedToPending,
+        demoted_to_skipped: demotedToSkipped,
         tiers,
         tier_share: Object.fromEntries(Object.entries(tiers).map(([t, n]) => [t, pct(n)])),
         owner_kinds: ownerKinds,

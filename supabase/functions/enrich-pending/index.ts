@@ -1,3 +1,17 @@
+/**
+ * enrich-pending — Claude AI enrichment for Tier 1 properties.
+ * Investment thesis, strategy, profit potential and social-outreach contact
+ * strategy, written to properties.ai_analysis. Only ever sees Tier 1 rows in
+ * practice: process-raw-properties sets enrichment_status='pending' only for
+ * Tier 1 at ingest time, and rescore-properties keeps that in sync when a
+ * later recalibration moves a row into or out of Tier 1 (see its header
+ * doc). Tier 1 gets Sonnet, anything else (reachable only if a row is
+ * manually set to 'pending' off-tier) gets Haiku.
+ *
+ * POST body: { limit?: number, state?: string }
+ *   state: optional, scopes the batch to one state (e.g. "NY").
+ */
+
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk";
 
@@ -5,6 +19,8 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+const MAKE_SECRET = Deno.env.get("MAKE_WEBHOOK_SECRET") ?? "";
 
 const fmt$ = (v: unknown) =>
   v ? `$${Number(v).toLocaleString()}` : "unknown";
@@ -61,6 +77,16 @@ Respond with ONLY this JSON:
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (!MAKE_SECRET) {
+    return new Response(JSON.stringify({ error: "Server misconfigured" }), {
+      status: 500, headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+  if (req.headers.get("x-make-secret") !== MAKE_SECRET) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -77,9 +103,11 @@ Deno.serve(async (req) => {
   const anthropic = new Anthropic({ apiKey });
 
   let limit = 10;
+  let stateFilter: string | null = null;
   try {
     const body = await req.json().catch(() => ({}));
     if (body.limit) limit = Math.min(Number(body.limit), 25);
+    if (typeof body.state === "string" && body.state.trim()) stateFilter = body.state.trim().toUpperCase();
   } catch { /* no body */ }
 
   // Reset any records stuck in 'processing' for more than 15 minutes (crash/timeout recovery)
@@ -90,12 +118,15 @@ Deno.serve(async (req) => {
     .eq("enrichment_status", "processing")
     .lt("updated_at", staleThreshold);
 
-  const { data: properties, error } = await supabase
+  let pendingQuery = supabase
     .from("properties")
     .select("*")
     .eq("enrichment_status", "pending")
     .order("composite_score", { ascending: false }) // best leads first
     .limit(limit);
+  if (stateFilter) pendingQuery = pendingQuery.eq("state", stateFilter);
+
+  const { data: properties, error } = await pendingQuery;
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
