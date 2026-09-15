@@ -197,6 +197,19 @@ Deno.serve(async (req) => {
   }
 
   const enriched = results.filter((r) => r.status === "enriched").length;
+
+  // Make discards the response body (see enrich-leads, same issue), so
+  // persist a diagnostic snapshot -- the only way to see per-property
+  // errors outside the HTTP response itself.
+  try {
+    await supabase.from("raw_properties").upsert({
+      property_hash: "diagnostic_enrich_pending",
+      source: "diagnostic",
+      raw_data: { ran_at: new Date().toISOString(), enriched, results },
+      processed_at: new Date().toISOString(),
+    }, { onConflict: "property_hash" });
+  } catch { /* diagnostics must never break the real response */ }
+
   return new Response(
     JSON.stringify({ enriched, results }),
     { headers: { ...cors, "Content-Type": "application/json" } }
