@@ -64,6 +64,16 @@ serve(async (req) => {
     marketing_consent = false,
     consent_source,
     brand: brandOverride,
+    campaign, utm_source, utm_medium, utm_campaign, utm_content,
+    landing_page, referrer_url,
+    // Rental Leasing module detail — only meaningful when lead_role is
+    // 'renter' or 'landlord'; harmless/unused otherwise.
+    move_date, move_date_flexible, target_locations, max_rent,
+    min_bedrooms, preferred_bedrooms, bathrooms_needed, household_size,
+    pets_description, parking_needed, laundry_needed, accessibility_notes,
+    unit_style, tour_availability, additional_notes, preferred_contact_method,
+    property_address, property_city, property_county, property_state, property_zip,
+    unit_count, expected_rent, vacancy_date, current_status, leasing_need,
   } = body;
 
   if (!phone && !email) return json({ error: 'phone or email required' }, 400);
@@ -99,8 +109,11 @@ serve(async (req) => {
       .from('isa_leads')
       .insert({
         segment, market,
-        module:               moduleParam ?? null,
-        lead_role:            leadRoleParam ?? null,
+        // '||' (not '??') on purpose: an empty string from a form field
+        // that omitted this value must land as NULL, not '' — the
+        // module/lead_role CHECK constraints reject '' but not NULL.
+        module:               moduleParam || null,
+        lead_role:            leadRoleParam || null,
         commission_source:    'inrange_generated',
         full_name:            name ?? 'Inbound Lead',
         phone, email,
@@ -173,6 +186,79 @@ serve(async (req) => {
       status:      'open',
       notes:       `No SMS consent on file — reach out by phone/email instead. Drafted message: "${smsText}"`,
     });
+  }
+
+  // Best-effort attribution row — only when the caller actually sent
+  // campaign/UTM/page data (public web forms), never required, and never
+  // allowed to fail the lead capture itself.
+  if (campaign || utm_source || utm_medium || utm_campaign || utm_content || landing_page || referrer_url) {
+    await supabase.from('lead_source_events').insert({
+      isa_lead_id: leadId,
+      source_channel: channel,
+      source_platform: source_name ?? null,
+      campaign: campaign ?? null,
+      utm_source: utm_source ?? null,
+      utm_medium: utm_medium ?? null,
+      utm_campaign: utm_campaign ?? null,
+      utm_content: utm_content ?? null,
+      landing_page: landing_page ?? null,
+      referrer_url: referrer_url ?? null,
+      first_touch_at: isNewLead ? new Date().toISOString() : null,
+      latest_touch_at: new Date().toISOString(),
+    }).then(({ error }) => { if (error) console.error('lead_source_events insert failed', error); });
+  }
+
+  // Rental Leasing module detail rows. Best-effort, upserted by isa_lead_id
+  // so a repeat submission from the same lead updates rather than errors.
+  // Never overwrites with blanks: only fields actually present in this
+  // request are included in the upsert object.
+  if (effectiveLeadRole === 'renter') {
+    const notesParts = [
+      preferred_contact_method ? `Preferred contact: ${preferred_contact_method}.` : null,
+      additional_notes || null,
+    ].filter(Boolean);
+    const rentalFields: Record<string, unknown> = { isa_lead_id: leadId };
+    if (move_date) rentalFields.move_date = move_date;
+    if (move_date_flexible != null) rentalFields.move_date_flexible = !!move_date_flexible;
+    if (target_locations) {
+      rentalFields.target_locations = Array.isArray(target_locations)
+        ? target_locations
+        : String(target_locations).split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    if (max_rent != null && max_rent !== '') rentalFields.max_rent = Number(max_rent);
+    if (min_bedrooms != null && min_bedrooms !== '') rentalFields.min_bedrooms = Number(min_bedrooms);
+    if (preferred_bedrooms != null && preferred_bedrooms !== '') rentalFields.preferred_bedrooms = Number(preferred_bedrooms);
+    if (bathrooms_needed != null && bathrooms_needed !== '') rentalFields.bathrooms_needed = Number(bathrooms_needed);
+    if (household_size != null && household_size !== '') rentalFields.household_size = Number(household_size);
+    if (pets_description) rentalFields.pets = { description: pets_description };
+    if (parking_needed != null) rentalFields.parking_needed = !!parking_needed;
+    if (laundry_needed != null) rentalFields.laundry_needed = !!laundry_needed;
+    if (accessibility_notes) rentalFields.accessibility_notes = accessibility_notes;
+    if (unit_style) rentalFields.unit_style = unit_style;
+    if (tour_availability) rentalFields.tour_availability = { notes: tour_availability };
+    if (notesParts.length > 0) rentalFields.additional_notes = notesParts.join(' ');
+    if (Object.keys(rentalFields).length > 1) {
+      await supabase.from('rental_inquiries').upsert(rentalFields, { onConflict: 'isa_lead_id' })
+        .then(({ error }) => { if (error) console.error('rental_inquiries upsert failed', error); });
+    }
+  } else if (effectiveLeadRole === 'landlord') {
+    const landlordFields: Record<string, unknown> = { isa_lead_id: leadId };
+    if (property_address) landlordFields.property_address = property_address;
+    if (property_city) landlordFields.city = property_city;
+    if (property_county) landlordFields.county = property_county;
+    if (property_state) landlordFields.state = property_state;
+    if (property_zip) landlordFields.zip = property_zip;
+    if (unit_count != null && unit_count !== '') landlordFields.unit_count = Number(unit_count);
+    if (expected_rent != null && expected_rent !== '') landlordFields.expected_rent = Number(expected_rent);
+    if (vacancy_date) landlordFields.vacancy_date = vacancy_date;
+    if (current_status) landlordFields.current_status = current_status;
+    if (leasing_need) landlordFields.leasing_need = leasing_need;
+    if (preferred_contact_method) landlordFields.preferred_contact_method = preferred_contact_method;
+    if (additional_notes) landlordFields.notes = additional_notes;
+    if (Object.keys(landlordFields).length > 1) {
+      await supabase.from('landlord_leads').upsert(landlordFields, { onConflict: 'isa_lead_id' })
+        .then(({ error }) => { if (error) console.error('landlord_leads upsert failed', error); });
+    }
   }
 
   const { data: touchNum } = await supabase.rpc('next_touch_number', { p_lead_id: leadId });
