@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lease My Property — Jet Realty Advisors</title>
+<style>
+  /* ── Placeholder brand tokens — see find-my-rental.html for the same note ── */
+  :root {
+    --jra-navy: #0f2a3d;
+    --jra-navy-light: #1c4258;
+    --jra-gold: #c8963e;
+    --jra-gold-light: #e6c98a;
+    --jra-bg: #f7f6f3;
+    --jra-text: #1a1a1a;
+    --jra-muted: #6b6b6b;
+    --jra-border: #e0ddd6;
+    --jra-error: #b3261e;
+    --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--jra-bg);
+    color: var(--jra-text);
+    line-height: 1.45;
+  }
+
+  .jra-form-wrap {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+  }
+
+  .jra-header { text-align: center; margin-bottom: 20px; }
+
+  .jra-header .jra-brand {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--jra-gold);
+    margin-bottom: 6px;
+  }
+
+  .jra-header h1 { font-size: 24px; margin: 0 0 8px; color: var(--jra-navy); }
+  .jra-header p { font-size: 14px; color: var(--jra-muted); margin: 0; }
+
+  form {
+    background: #fff;
+    border: 1px solid var(--jra-border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  fieldset { border: none; padding: 0; margin: 0 0 18px; }
+
+  legend {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--jra-navy-light);
+    margin-bottom: 10px;
+    padding: 0;
+  }
+
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; min-width: 0; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--jra-text);
+  }
+
+  label .optional { font-weight: 400; color: var(--jra-muted); }
+
+  .field { margin-bottom: 14px; }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="date"],
+  input[type="number"],
+  select,
+  textarea {
+    width: 100%;
+    padding: 11px 12px;
+    font-size: 16px;
+    border: 1px solid var(--jra-border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--jra-text);
+    font-family: inherit;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    outline: 2px solid var(--jra-gold);
+    outline-offset: 1px;
+    border-color: var(--jra-gold);
+  }
+
+  textarea { resize: vertical; min-height: 70px; }
+
+  .checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .checkbox-row input[type="checkbox"] {
+    margin-top: 3px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  .checkbox-row label { font-weight: 400; font-size: 14px; margin-bottom: 0; }
+
+  .consent-box {
+    background: var(--jra-bg);
+    border: 1px solid var(--jra-border);
+    border-radius: 8px;
+    padding: 14px;
+    margin: 18px 0;
+  }
+
+  .consent-box p {
+    font-size: 12px;
+    color: var(--jra-muted);
+    margin: 8px 0 0;
+    line-height: 1.5;
+  }
+
+  .submit-btn {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--jra-navy);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .submit-btn:hover { background: var(--jra-navy-light); }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .jra-footnote {
+    text-align: center;
+    font-size: 11px;
+    color: var(--jra-muted);
+    margin-top: 14px;
+  }
+
+  .jra-thankyou {
+    display: none;
+    background: #fff;
+    border: 1px solid var(--jra-border);
+    border-radius: var(--radius);
+    padding: 32px 24px;
+    text-align: center;
+  }
+
+  .jra-thankyou .check {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--jra-gold-light);
+    color: var(--jra-navy);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin: 0 auto 16px;
+  }
+
+  .jra-thankyou h2 { color: var(--jra-navy); font-size: 20px; margin: 0 0 10px; }
+  .jra-thankyou p { color: var(--jra-muted); font-size: 14px; margin: 0; }
+
+  .jra-error-banner {
+    display: none;
+    background: #fdeceb;
+    border: 1px solid var(--jra-error);
+    color: var(--jra-error);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+
+  @media (max-width: 420px) {
+    .row { flex-direction: column; gap: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="jra-form-wrap">
+  <div class="jra-header">
+    <div class="jra-brand">Jet Realty Advisors</div>
+    <h1>Lease My Property</h1>
+    <p>Get a rental marketing and tenant-placement plan from Jet Realty Advisors.</p>
+  </div>
+
+  <div class="jra-error-banner" id="jra-error-banner">
+    Something went wrong submitting your request. Please try again, or call us directly.
+  </div>
+
+  <form id="jra-landlord-form" action="https://hook.us2.make.com/rnad6pwvp8gpnw3hwcqmc852k13fqaha" method="POST" target="jra-hidden-frame">
+    <input type="hidden" name="segment" value="general_inquiry">
+    <input type="hidden" name="module" value="rental_leasing">
+    <input type="hidden" name="lead_role" value="landlord">
+    <input type="hidden" name="channel" value="website_form">
+    <input type="hidden" name="source_name" value="jetreadvisors.com — Lease My Property">
+    <input type="hidden" name="source_url" id="jra-source-url" value="">
+    <input type="hidden" name="consent_source" value="jetreadvisors_lease_my_property_form">
+    <input type="hidden" name="utm_source" id="jra-utm-source" value="">
+    <input type="hidden" name="utm_medium" id="jra-utm-medium" value="">
+    <input type="hidden" name="utm_campaign" id="jra-utm-campaign" value="">
+    <input type="hidden" name="utm_content" id="jra-utm-content" value="">
+    <input type="hidden" name="landing_page" id="jra-landing-page" value="">
+    <input type="hidden" name="referrer_url" id="jra-referrer-url" value="">
+
+    <fieldset>
+      <legend>Contact Info</legend>
+      <div class="field">
+        <label for="name">Full name*</label>
+        <input type="text" id="name" name="name" required autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="email">Email address*</label>
+        <input type="email" id="email" name="email" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="phone">Mobile phone*</label>
+        <input type="tel" id="phone" name="phone" required autocomplete="tel" placeholder="(555) 555-5555">
+      </div>
+      <div class="field">
+        <label for="preferred_contact_method">Preferred contact method*</label>
+        <select id="preferred_contact_method" name="preferred_contact_method" required>
+          <option value="">Select one</option>
+          <option value="call">Call</option>
+          <option value="text">Text</option>
+          <option value="email">Email</option>
+        </select>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Property</legend>
+      <div class="field">
+        <label for="property_address">Property address*</label>
+        <input type="text" id="property_address" name="property_address" required>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="property_city">City*</label>
+          <input type="text" id="property_city" name="property_city" required>
+        </div>
+        <div class="field">
+          <label for="property_state">State*</label>
+          <select id="property_state" name="property_state" required>
+            <option value="">–</option>
+            <option value="NY">NY</option>
+            <option value="NJ">NJ</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="property_zip">ZIP</label>
+          <input type="text" id="property_zip" name="property_zip" inputmode="numeric" maxlength="10">
+        </div>
+      </div>
+      <div class="field">
+        <label for="property_county">County <span class="optional">(optional)</span></label>
+        <input type="text" id="property_county" name="property_county">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="unit_count">Number of units</label>
+          <input type="number" id="unit_count" name="unit_count" min="1" step="1" inputmode="numeric" value="1">
+        </div>
+        <div class="field">
+          <label for="expected_rent">Expected monthly rent ($)</label>
+          <input type="number" id="expected_rent" name="expected_rent" min="0" step="1" inputmode="numeric">
+        </div>
+      </div>
+      <div class="field">
+        <label for="vacancy_date">Vacancy / availability date</label>
+        <input type="date" id="vacancy_date" name="vacancy_date">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Leasing Need</legend>
+      <div class="field">
+        <label for="current_status">Current status</label>
+        <select id="current_status" name="current_status">
+          <option value="vacant_now">Vacant now</option>
+          <option value="tenant_in_place">Tenant currently in place</option>
+          <option value="becoming_vacant">Becoming vacant soon</option>
+          <option value="not_sure">Not sure yet</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="leasing_need">What kind of help do you need? <span class="optional">(optional)</span></label>
+        <select id="leasing_need" name="leasing_need">
+          <option value="">Select one</option>
+          <option value="full_tenant_placement">Full tenant placement</option>
+          <option value="marketing_only">Marketing / listing only</option>
+          <option value="pricing_guidance">Rental pricing guidance</option>
+          <option value="ongoing_management">Ongoing leasing relationship</option>
+          <option value="not_sure">Not sure — need guidance</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="additional_notes">Anything else we should know? <span class="optional">(optional)</span></label>
+        <textarea id="additional_notes" name="additional_notes"></textarea>
+      </div>
+    </fieldset>
+
+    <div class="consent-box">
+      <div class="checkbox-row" style="margin-bottom:0;">
+        <input type="checkbox" id="sms_consent" name="sms_consent" value="true">
+        <label for="sms_consent">I'd like to receive text updates about this property</label>
+      </div>
+      <p>By submitting, you agree that Jet Realty Advisors may contact you by your selected method about your leasing inquiry. Consent is not a condition of obtaining services. Reply STOP to opt out of text messages.</p>
+    </div>
+
+    <button type="submit" class="submit-btn" id="jra-submit-btn">Get My Leasing Plan</button>
+    <p class="jra-footnote">Jet Realty Advisors · Licensed NY &amp; NJ Real Estate Brokerage</p>
+  </form>
+
+  <div class="jra-thankyou" id="jra-thankyou">
+    <div class="check">✓</div>
+    <h2>Thank you.</h2>
+    <p>Jet Realty Advisors received your request. A member of our team will follow up shortly to discuss a rental marketing and tenant-placement plan for your property.</p>
+  </div>
+</div>
+
+<iframe name="jra-hidden-frame" style="display:none;" title="form submission"></iframe>
+
+<script>
+(function () {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    document.getElementById('jra-utm-source').value = params.get('utm_source') || '';
+    document.getElementById('jra-utm-medium').value = params.get('utm_medium') || '';
+    document.getElementById('jra-utm-campaign').value = params.get('utm_campaign') || '';
+    document.getElementById('jra-utm-content').value = params.get('utm_content') || '';
+    document.getElementById('jra-landing-page').value = window.location.href;
+    document.getElementById('jra-source-url').value = window.location.href;
+    document.getElementById('jra-referrer-url').value = document.referrer || '';
+  } catch (e) { /* non-fatal */ }
+
+  var form = document.getElementById('jra-landlord-form');
+  var thankYou = document.getElementById('jra-thankyou');
+  var errorBanner = document.getElementById('jra-error-banner');
+  var submitBtn = document.getElementById('jra-submit-btn');
+  var iframe = document.querySelector('iframe[name="jra-hidden-frame"]');
+  var formWasSubmitted = false;
+
+  form.addEventListener('submit', function () {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+    errorBanner.style.display = 'none';
+    formWasSubmitted = true;
+  });
+
+  iframe.addEventListener('load', function () {
+    if (!formWasSubmitted) return; // the iframe's own initial blank load
+    form.style.display = 'none';
+    thankYou.style.display = 'block';
+  });
+})();
+</script>
+
+</body>
+</html>

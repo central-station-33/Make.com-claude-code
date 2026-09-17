@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Find My NY/NJ Rental — Jet Realty Advisors</title>
+<style>
+  /* ── Placeholder brand tokens ──────────────────────────────────────────
+     No Jet Realty Advisors brand kit (colors/fonts/logo) was available
+     when this was built. Swap these variables for the real brand before
+     this goes live on jetreadvisors.com. */
+  :root {
+    --jra-navy: #0f2a3d;
+    --jra-navy-light: #1c4258;
+    --jra-gold: #c8963e;
+    --jra-gold-light: #e6c98a;
+    --jra-bg: #f7f6f3;
+    --jra-text: #1a1a1a;
+    --jra-muted: #6b6b6b;
+    --jra-border: #e0ddd6;
+    --jra-error: #b3261e;
+    --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--jra-bg);
+    color: var(--jra-text);
+    line-height: 1.45;
+  }
+
+  .jra-form-wrap {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+  }
+
+  .jra-header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .jra-header .jra-brand {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--jra-gold);
+    margin-bottom: 6px;
+  }
+
+  .jra-header h1 {
+    font-size: 24px;
+    margin: 0 0 8px;
+    color: var(--jra-navy);
+  }
+
+  .jra-header p {
+    font-size: 14px;
+    color: var(--jra-muted);
+    margin: 0;
+  }
+
+  form {
+    background: #fff;
+    border: 1px solid var(--jra-border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 18px;
+  }
+
+  legend {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--jra-navy-light);
+    margin-bottom: 10px;
+    padding: 0;
+  }
+
+  .row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .row > * { flex: 1; min-width: 0; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--jra-text);
+  }
+
+  label .optional {
+    font-weight: 400;
+    color: var(--jra-muted);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .field { margin-bottom: 14px; }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="date"],
+  input[type="number"],
+  select,
+  textarea {
+    width: 100%;
+    padding: 11px 12px;
+    font-size: 16px; /* 16px avoids iOS zoom-on-focus */
+    border: 1px solid var(--jra-border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--jra-text);
+    font-family: inherit;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    outline: 2px solid var(--jra-gold);
+    outline-offset: 1px;
+    border-color: var(--jra-gold);
+  }
+
+  textarea { resize: vertical; min-height: 70px; }
+
+  .checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .checkbox-row input[type="checkbox"] {
+    margin-top: 3px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  .checkbox-row label {
+    font-weight: 400;
+    font-size: 14px;
+    margin-bottom: 0;
+  }
+
+  .pill-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill-group label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    font-size: 13px;
+    padding: 8px 12px;
+    border: 1px solid var(--jra-border);
+    border-radius: 999px;
+    cursor: pointer;
+    margin-bottom: 0;
+  }
+
+  .pill-group input { margin: 0; }
+
+  .consent-box {
+    background: var(--jra-bg);
+    border: 1px solid var(--jra-border);
+    border-radius: 8px;
+    padding: 14px;
+    margin: 18px 0;
+  }
+
+  .consent-box p {
+    font-size: 12px;
+    color: var(--jra-muted);
+    margin: 8px 0 0;
+    line-height: 1.5;
+  }
+
+  .submit-btn {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--jra-navy);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .submit-btn:hover { background: var(--jra-navy-light); }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .jra-footnote {
+    text-align: center;
+    font-size: 11px;
+    color: var(--jra-muted);
+    margin-top: 14px;
+  }
+
+  /* ── Thank-you state ── */
+  .jra-thankyou {
+    display: none;
+    background: #fff;
+    border: 1px solid var(--jra-border);
+    border-radius: var(--radius);
+    padding: 32px 24px;
+    text-align: center;
+  }
+
+  .jra-thankyou .check {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--jra-gold-light);
+    color: var(--jra-navy);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin: 0 auto 16px;
+  }
+
+  .jra-thankyou h2 {
+    color: var(--jra-navy);
+    font-size: 20px;
+    margin: 0 0 10px;
+  }
+
+  .jra-thankyou p {
+    color: var(--jra-muted);
+    font-size: 14px;
+    margin: 0;
+  }
+
+  .jra-error-banner {
+    display: none;
+    background: #fdeceb;
+    border: 1px solid var(--jra-error);
+    color: var(--jra-error);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+
+  @media (max-width: 420px) {
+    .row { flex-direction: column; gap: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="jra-form-wrap">
+  <div class="jra-header">
+    <div class="jra-brand">Jet Realty Advisors</div>
+    <h1>Find My NY/NJ Rental</h1>
+    <p>Tell us your move date, budget, and must-haves. We'll match you with available options and guide you from tour to lease. Takes under 90 seconds.</p>
+  </div>
+
+  <div class="jra-error-banner" id="jra-error-banner">
+    Something went wrong submitting your request. Please try again, or call us directly.
+  </div>
+
+  <form id="jra-rental-form" action="https://hook.us2.make.com/rnad6pwvp8gpnw3hwcqmc852k13fqaha" method="POST" target="jra-hidden-frame">
+    <!-- Routing / attribution — not shown to the user -->
+    <input type="hidden" name="segment" value="renter">
+    <input type="hidden" name="module" value="rental_leasing">
+    <input type="hidden" name="lead_role" value="renter">
+    <input type="hidden" name="channel" value="website_form">
+    <input type="hidden" name="source_name" value="jetreadvisors.com — Find My Rental">
+    <input type="hidden" name="source_url" id="jra-source-url" value="">
+    <input type="hidden" name="consent_source" value="jetreadvisors_find_my_rental_form">
+    <input type="hidden" name="utm_source" id="jra-utm-source" value="">
+    <input type="hidden" name="utm_medium" id="jra-utm-medium" value="">
+    <input type="hidden" name="utm_campaign" id="jra-utm-campaign" value="">
+    <input type="hidden" name="utm_content" id="jra-utm-content" value="">
+    <input type="hidden" name="landing_page" id="jra-landing-page" value="">
+    <input type="hidden" name="referrer_url" id="jra-referrer-url" value="">
+
+    <fieldset>
+      <legend>Contact Info</legend>
+      <div class="row">
+        <div class="field">
+          <label for="first_name">First name*</label>
+          <input type="text" id="first_name" name="first_name" required autocomplete="given-name">
+        </div>
+        <div class="field">
+          <label for="last_name">Last name*</label>
+          <input type="text" id="last_name" name="last_name" required autocomplete="family-name">
+        </div>
+      </div>
+      <div class="field">
+        <label for="email">Email address*</label>
+        <input type="email" id="email" name="email" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="phone">Mobile phone*</label>
+        <input type="tel" id="phone" name="phone" required autocomplete="tel" placeholder="(555) 555-5555">
+      </div>
+      <div class="field">
+        <label for="preferred_contact_method">Preferred contact method*</label>
+        <select id="preferred_contact_method" name="preferred_contact_method" required>
+          <option value="">Select one</option>
+          <option value="call">Call</option>
+          <option value="text">Text</option>
+          <option value="email">Email</option>
+        </select>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>What You're Looking For</legend>
+      <div class="row">
+        <div class="field">
+          <label for="move_date">Desired move date</label>
+          <input type="date" id="move_date" name="move_date">
+        </div>
+        <div class="field">
+          <label for="max_rent">Max monthly rent ($)*</label>
+          <input type="number" id="max_rent" name="max_rent" required min="0" step="1" inputmode="numeric">
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="move_date_flexible" name="move_date_flexible" value="true">
+        <label for="move_date_flexible">My move date is flexible</label>
+      </div>
+      <div class="field">
+        <label for="target_locations">Target neighborhoods, cities, counties, or commute destination*</label>
+        <input type="text" id="target_locations" name="target_locations" required placeholder="e.g. Hoboken, Jersey City, near Penn Station">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="min_bedrooms">Minimum bedrooms</label>
+          <select id="min_bedrooms" name="min_bedrooms">
+            <option value="">No preference</option>
+            <option value="0">Studio</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4+</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="bathrooms_needed">Bathrooms needed</label>
+          <select id="bathrooms_needed" name="bathrooms_needed">
+            <option value="">No preference</option>
+            <option value="1">1</option>
+            <option value="1.5">1.5</option>
+            <option value="2">2</option>
+            <option value="3">3+</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="household_size">Household size <span class="optional">(optional)</span></label>
+        <input type="number" id="household_size" name="household_size" min="1" step="1" inputmode="numeric">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Additional Preferences</legend>
+      <div class="checkbox-row">
+        <input type="checkbox" id="has_pets" name="has_pets" value="true">
+        <label for="has_pets">I have a pet</label>
+      </div>
+      <div class="field" id="pets_description_field" style="display:none;">
+        <label for="pets_description">Pet type and size</label>
+        <input type="text" id="pets_description" name="pets_description" placeholder="e.g. 1 dog, ~30 lbs">
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="parking_needed" name="parking_needed" value="true">
+        <label for="parking_needed">I need parking</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="laundry_needed" name="laundry_needed" value="true">
+        <label for="laundry_needed">In-unit or on-site laundry is important to me</label>
+      </div>
+      <div class="field">
+        <label for="unit_style">Unit type</label>
+        <select id="unit_style" name="unit_style">
+          <option value="unfurnished">Unfurnished / standard lease</option>
+          <option value="furnished">Furnished</option>
+          <option value="short_term">Short-term</option>
+          <option value="long_term">Long-term</option>
+          <option value="corporate_housing">Corporate housing</option>
+          <option value="relocation">Relocation</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="accessibility_notes">Accessibility needs <span class="optional">(optional)</span></label>
+        <input type="text" id="accessibility_notes" name="accessibility_notes" placeholder="e.g. elevator building required">
+      </div>
+      <div class="field">
+        <label for="tour_availability">When are you generally available to tour? <span class="optional">(optional)</span></label>
+        <input type="text" id="tour_availability" name="tour_availability" placeholder="e.g. weekday evenings, weekends">
+      </div>
+      <div class="field">
+        <label for="additional_notes">Anything else we should know? <span class="optional">(optional)</span></label>
+        <textarea id="additional_notes" name="additional_notes"></textarea>
+      </div>
+    </fieldset>
+
+    <div class="consent-box">
+      <div class="checkbox-row" style="margin-bottom:0;">
+        <input type="checkbox" id="sms_consent" name="sms_consent" value="true">
+        <label for="sms_consent">I'd like to receive text updates about my rental search</label>
+      </div>
+      <p>By submitting, you agree that Jet Realty Advisors may contact you by your selected method about your rental inquiry. Consent is not a condition of obtaining services. Reply STOP to opt out of text messages.</p>
+    </div>
+
+    <button type="submit" class="submit-btn" id="jra-submit-btn">Find My Rental</button>
+    <p class="jra-footnote">Jet Realty Advisors · Licensed NY &amp; NJ Real Estate Brokerage</p>
+  </form>
+
+  <div class="jra-thankyou" id="jra-thankyou">
+    <div class="check">✓</div>
+    <h2>Thank you.</h2>
+    <p>Jet Realty Advisors received your request. A member of our team will follow up shortly. In the meantime, feel free to explore available rentals or reach out with any questions.</p>
+  </div>
+</div>
+
+<iframe name="jra-hidden-frame" style="display:none;" title="form submission"></iframe>
+
+<script>
+(function () {
+  // Capture UTM params, landing page, and referrer at load — silent no-ops
+  // if any read fails (e.g. sandboxed preview), never blocks the form.
+  try {
+    var params = new URLSearchParams(window.location.search);
+    document.getElementById('jra-utm-source').value = params.get('utm_source') || '';
+    document.getElementById('jra-utm-medium').value = params.get('utm_medium') || '';
+    document.getElementById('jra-utm-campaign').value = params.get('utm_campaign') || '';
+    document.getElementById('jra-utm-content').value = params.get('utm_content') || '';
+    document.getElementById('jra-landing-page').value = window.location.href;
+    document.getElementById('jra-source-url').value = window.location.href;
+    document.getElementById('jra-referrer-url').value = document.referrer || '';
+  } catch (e) { /* non-fatal */ }
+
+  var petsCheckbox = document.getElementById('has_pets');
+  var petsField = document.getElementById('pets_description_field');
+  petsCheckbox.addEventListener('change', function () {
+    petsField.style.display = petsCheckbox.checked ? 'block' : 'none';
+  });
+
+  var form = document.getElementById('jra-rental-form');
+  var thankYou = document.getElementById('jra-thankyou');
+  var errorBanner = document.getElementById('jra-error-banner');
+  var submitBtn = document.getElementById('jra-submit-btn');
+  var iframe = document.querySelector('iframe[name="jra-hidden-frame"]');
+  // The iframe fires its own 'load' event once just from existing on the
+  // page (loading about:blank), before any submission — this flag is what
+  // tells that apart from the real post-submit load.
+  var formWasSubmitted = false;
+
+  // Combine first/last name into the single `name` field respond-lead expects.
+  form.addEventListener('submit', function () {
+    var first = document.getElementById('first_name').value.trim();
+    var last = document.getElementById('last_name').value.trim();
+    var hiddenName = form.querySelector('input[name="name"]');
+    if (!hiddenName) {
+      hiddenName = document.createElement('input');
+      hiddenName.type = 'hidden';
+      hiddenName.name = 'name';
+      form.appendChild(hiddenName);
+    }
+    hiddenName.value = (first + ' ' + last).trim();
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+    errorBanner.style.display = 'none';
+    formWasSubmitted = true;
+
+    // The iframe target means the browser navigates the hidden iframe, not
+    // this page — no CORS restriction applies to the submission itself.
+    // We can't read the response, so the iframe's next load event (now
+    // that formWasSubmitted is true) is treated as "delivered".
+  });
+
+  iframe.addEventListener('load', function () {
+    if (!formWasSubmitted) return; // the iframe's own initial blank load
+    form.style.display = 'none';
+    thankYou.style.display = 'block';
+  });
+})();
+</script>
+
+</body>
+</html>
