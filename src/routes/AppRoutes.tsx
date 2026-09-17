@@ -21,6 +21,10 @@ const InRangeLeadDetail = lazy(() => import(/* webpackChunkName: "inrange-detail
 const InRangeAddLead = lazy(() => import(/* webpackChunkName: "inrange-add" */ '@/pages/InRangeAddLead'));
 const InRangeImportCSV = lazy(() => import(/* webpackChunkName: "inrange-import" */ '@/pages/InRangeImportCSV'));
 const InRangeLists = lazy(() => import(/* webpackChunkName: "inrange-lists" */ '@/pages/InRangeLists'));
+const RentalLeads = lazy(() => import(/* webpackChunkName: "rental-leads" */ '@/pages/RentalLeads'));
+const RentalLeadDetail = lazy(() => import(/* webpackChunkName: "rental-lead-detail" */ '@/pages/RentalLeadDetail'));
+const LandlordLeads = lazy(() => import(/* webpackChunkName: "landlord-leads" */ '@/pages/LandlordLeads'));
+const LandlordLeadDetail = lazy(() => import(/* webpackChunkName: "landlord-lead-detail" */ '@/pages/LandlordLeadDetail'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen bg-background">
@@ -190,6 +194,40 @@ export const AppRoutes = () => {
           element={
             <PrivateRoute>
               <InRangeLeadDetail />
+            </PrivateRoute>
+          }
+        />
+
+        {/* Rental Leasing module */}
+        <Route
+          path="/leasing/renters"
+          element={
+            <PrivateRoute>
+              <RentalLeads />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/leasing/renters/:id"
+          element={
+            <PrivateRoute>
+              <RentalLeadDetail />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/leasing/landlords"
+          element={
+            <PrivateRoute>
+              <LandlordLeads />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/leasing/landlords/:id"
+          element={
+            <PrivateRoute>
+              <LandlordLeadDetail />
             </PrivateRoute>
           }
         />

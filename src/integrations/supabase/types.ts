@@ -9,6 +9,1241 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      isa_leads: {
+        Row: {
+          ai_bant_authority: number | null
+          ai_bant_budget: number | null
+          ai_bant_need: number | null
+          ai_bant_timing: number | null
+          ai_confidence: number | null
+          ai_contact_strategy: string | null
+          ai_enriched_at: string | null
+          ai_input_tokens: number | null
+          ai_investment_thesis: string | null
+          ai_model: string | null
+          ai_output_tokens: number | null
+          ai_prompt_version: string | null
+          ai_risk_flags: string[] | null
+          ai_summary: string | null
+          assigned_agent_id: string | null
+          assigned_isa: string | null
+          bant_score: number | null
+          cadence_paused: boolean
+          cadence_step: number
+          commission_source: string
+          consent_captured_at: string | null
+          consent_source: string | null
+          contract_value: number | null
+          county: string | null
+          created_at: string
+          email: string | null
+          employer: string | null
+          entity_name: string | null
+          first_response_at: string | null
+          full_name: string | null
+          id: string
+          inbound_channel: string | null
+          inbound_message: string | null
+          instagram_handle: string | null
+          isa_talking_points: Json
+          last_cadence_at: string | null
+          lead_role: string | null
+          linkedin_url: string | null
+          market: string
+          marketing_consent: boolean | null
+          module: string | null
+          motivation_score: number | null
+          motivation_signals: Json
+          opted_out_at: string | null
+          opted_out_channels: string[]
+          origin_country: string | null
+          outreach_status: string
+          permit_number: string | null
+          phone: string | null
+          price_range_max: number | null
+          price_range_min: number | null
+          production_name: string | null
+          property_address: string | null
+          raw_data: Json
+          relocation_partner_id: string | null
+          rep_agency: string | null
+          rep_email: string | null
+          rep_name: string | null
+          rep_phone: string | null
+          routing: string
+          segment: string
+          skip_trace_status: string | null
+          skip_traced_at: string | null
+          sms_consent: boolean | null
+          source_name: string | null
+          source_url: string | null
+          sport: string | null
+          state: string | null
+          team_name: string | null
+          timeline_months: number | null
+          updated_at: string
+        }
+        Insert: {
+          ai_bant_authority?: number | null
+          ai_bant_budget?: number | null
+          ai_bant_need?: number | null
+          ai_bant_timing?: number | null
+          ai_confidence?: number | null
+          ai_contact_strategy?: string | null
+          ai_enriched_at?: string | null
+          ai_input_tokens?: number | null
+          ai_investment_thesis?: string | null
+          ai_model?: string | null
+          ai_output_tokens?: number | null
+          ai_prompt_version?: string | null
+          ai_risk_flags?: string[] | null
+          ai_summary?: string | null
+          assigned_agent_id?: string | null
+          assigned_isa?: string | null
+          bant_score?: number | null
+          cadence_paused?: boolean
+          cadence_step?: number
+          commission_source?: string
+          consent_captured_at?: string | null
+          consent_source?: string | null
+          contract_value?: number | null
+          county?: string | null
+          created_at?: string
+          email?: string | null
+          employer?: string | null
+          entity_name?: string | null
+          first_response_at?: string | null
+          full_name?: string | null
+          id?: string
+          inbound_channel?: string | null
+          inbound_message?: string | null
+          instagram_handle?: string | null
+          isa_talking_points?: Json
+          last_cadence_at?: string | null
+          lead_role?: string | null
+          linkedin_url?: string | null
+          market: string
+          marketing_consent?: boolean | null
+          module?: string | null
+          motivation_score?: number | null
+          motivation_signals?: Json
+          opted_out_at?: string | null
+          opted_out_channels?: string[]
+          origin_country?: string | null
+          outreach_status?: string
+          permit_number?: string | null
+          phone?: string | null
+          price_range_max?: number | null
+          price_range_min?: number | null
+          production_name?: string | null
+          property_address?: string | null
+          raw_data?: Json
+          relocation_partner_id?: string | null
+          rep_agency?: string | null
+          rep_email?: string | null
+          rep_name?: string | null
+          rep_phone?: string | null
+          routing?: string
+          segment: string
+          skip_trace_status?: string | null
+          skip_traced_at?: string | null
+          sms_consent?: boolean | null
+          source_name?: string | null
+          source_url?: string | null
+          sport?: string | null
+          state?: string | null
+          team_name?: string | null
+          timeline_months?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ai_bant_authority?: number | null
+          ai_bant_budget?: number | null
+          ai_bant_need?: number | null
+          ai_bant_timing?: number | null
+          ai_confidence?: number | null
+          ai_contact_strategy?: string | null
+          ai_enriched_at?: string | null
+          ai_input_tokens?: number | null
+          ai_investment_thesis?: string | null
+          ai_model?: string | null
+          ai_output_tokens?: number | null
+          ai_prompt_version?: string | null
+          ai_risk_flags?: string[] | null
+          ai_summary?: string | null
+          assigned_agent_id?: string | null
+          assigned_isa?: string | null
+          bant_score?: number | null
+          cadence_paused?: boolean
+          cadence_step?: number
+          commission_source?: string
+          consent_captured_at?: string | null
+          consent_source?: string | null
+          contract_value?: number | null
+          county?: string | null
+          created_at?: string
+          email?: string | null
+          employer?: string | null
+          entity_name?: string | null
+          first_response_at?: string | null
+          full_name?: string | null
+          id?: string
+          inbound_channel?: string | null
+          inbound_message?: string | null
+          instagram_handle?: string | null
+          isa_talking_points?: Json
+          last_cadence_at?: string | null
+          lead_role?: string | null
+          linkedin_url?: string | null
+          market?: string
+          marketing_consent?: boolean | null
+          module?: string | null
+          motivation_score?: number | null
+          motivation_signals?: Json
+          opted_out_at?: string | null
+          opted_out_channels?: string[]
+          origin_country?: string | null
+          outreach_status?: string
+          permit_number?: string | null
+          phone?: string | null
+          price_range_max?: number | null
+          price_range_min?: number | null
+          production_name?: string | null
+          property_address?: string | null
+          raw_data?: Json
+          relocation_partner_id?: string | null
+          rep_agency?: string | null
+          rep_email?: string | null
+          rep_name?: string | null
+          rep_phone?: string | null
+          routing?: string
+          segment?: string
+          skip_trace_status?: string | null
+          skip_traced_at?: string | null
+          sms_consent?: boolean | null
+          source_name?: string | null
+          source_url?: string | null
+          sport?: string | null
+          state?: string | null
+          team_name?: string | null
+          timeline_months?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_commission_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "team_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "isa_leads_relocation_partner_id_fkey"
+            columns: ["relocation_partner_id"]
+            isOneToOne: false
+            referencedRelation: "relocation_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      relocation_partners: {
+        Row: {
+          active: boolean
+          company: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          partner_name: string
+          partner_type: string | null
+          referral_fee_pct: number
+          your_pct: number
+        }
+        Insert: {
+          active?: boolean
+          company?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          partner_name: string
+          partner_type?: string | null
+          referral_fee_pct?: number
+          your_pct?: number
+        }
+        Update: {
+          active?: boolean
+          company?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          partner_name?: string
+          partner_type?: string | null
+          referral_fee_pct?: number
+          your_pct?: number
+        }
+        Relationships: []
+      }
+      content_queue: {
+        Row: {
+          agent_run_id: string | null
+          audience: string | null
+          body: string
+          brand: string | null
+          channel: string | null
+          compliance_notes: string | null
+          content_type: string
+          created_at: string
+          draft_cta: string | null
+          draft_hashtags: string[]
+          expiration_date: string | null
+          id: string
+          linked_market: string | null
+          linked_rental_unit_id: string | null
+          meta_description: string | null
+          performance_metrics: Json
+          platform_data: Json | null
+          published_at: string | null
+          published_url: string | null
+          rejection_note: string | null
+          reviewer: string | null
+          scheduled_for: string
+          status: string
+          tags: string[] | null
+          target_segment: string | null
+          title: string | null
+          topic: string | null
+          tracked_url: string | null
+          utm_campaign: string | null
+          verified_facts: Json
+        }
+        Insert: {
+          agent_run_id?: string | null
+          audience?: string | null
+          body: string
+          brand?: string | null
+          channel?: string | null
+          compliance_notes?: string | null
+          content_type: string
+          created_at?: string
+          draft_cta?: string | null
+          draft_hashtags?: string[]
+          expiration_date?: string | null
+          id?: string
+          linked_market?: string | null
+          linked_rental_unit_id?: string | null
+          meta_description?: string | null
+          performance_metrics?: Json
+          platform_data?: Json | null
+          published_at?: string | null
+          published_url?: string | null
+          rejection_note?: string | null
+          reviewer?: string | null
+          scheduled_for?: string
+          status?: string
+          tags?: string[] | null
+          target_segment?: string | null
+          title?: string | null
+          topic?: string | null
+          tracked_url?: string | null
+          utm_campaign?: string | null
+          verified_facts?: Json
+        }
+        Update: {
+          agent_run_id?: string | null
+          audience?: string | null
+          body?: string
+          brand?: string | null
+          channel?: string | null
+          compliance_notes?: string | null
+          content_type?: string
+          created_at?: string
+          draft_cta?: string | null
+          draft_hashtags?: string[]
+          expiration_date?: string | null
+          id?: string
+          linked_market?: string | null
+          linked_rental_unit_id?: string | null
+          meta_description?: string | null
+          performance_metrics?: Json
+          platform_data?: Json | null
+          published_at?: string | null
+          published_url?: string | null
+          rejection_note?: string | null
+          reviewer?: string | null
+          scheduled_for?: string
+          status?: string
+          tags?: string[] | null
+          target_segment?: string | null
+          title?: string | null
+          topic?: string | null
+          tracked_url?: string | null
+          utm_campaign?: string | null
+          verified_facts?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_queue_linked_rental_unit_id_fkey"
+            columns: ["linked_rental_unit_id"]
+            isOneToOne: false
+            referencedRelation: "rental_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_inquiries: {
+        Row: {
+          accessibility_notes: string | null
+          additional_notes: string | null
+          ai_confidence: number | null
+          ai_conversation_summary: string | null
+          ai_enriched_at: string | null
+          ai_escalation_needed: boolean
+          ai_escalation_reason: string | null
+          ai_missing_info: string[]
+          ai_model: string | null
+          bathrooms_needed: number | null
+          created_at: string
+          household_size: number | null
+          id: string
+          isa_lead_id: string
+          laundry_needed: boolean | null
+          lost_reason: string | null
+          max_rent: number | null
+          min_bedrooms: number | null
+          move_date: string | null
+          move_date_flexible: boolean
+          parking_needed: boolean | null
+          pets: Json
+          pipeline_stage: string
+          preferred_bedrooms: number | null
+          target_locations: string[]
+          tour_availability: Json
+          unit_style: string | null
+          updated_at: string
+        }
+        Insert: {
+          accessibility_notes?: string | null
+          additional_notes?: string | null
+          ai_confidence?: number | null
+          ai_conversation_summary?: string | null
+          ai_enriched_at?: string | null
+          ai_escalation_needed?: boolean
+          ai_escalation_reason?: string | null
+          ai_missing_info?: string[]
+          ai_model?: string | null
+          bathrooms_needed?: number | null
+          created_at?: string
+          household_size?: number | null
+          id?: string
+          isa_lead_id: string
+          laundry_needed?: boolean | null
+          lost_reason?: string | null
+          max_rent?: number | null
+          min_bedrooms?: number | null
+          move_date?: string | null
+          move_date_flexible?: boolean
+          parking_needed?: boolean | null
+          pets?: Json
+          pipeline_stage?: string
+          preferred_bedrooms?: number | null
+          target_locations?: string[]
+          tour_availability?: Json
+          unit_style?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accessibility_notes?: string | null
+          additional_notes?: string | null
+          ai_confidence?: number | null
+          ai_conversation_summary?: string | null
+          ai_enriched_at?: string | null
+          ai_escalation_needed?: boolean
+          ai_escalation_reason?: string | null
+          ai_missing_info?: string[]
+          ai_model?: string | null
+          bathrooms_needed?: number | null
+          created_at?: string
+          household_size?: number | null
+          id?: string
+          isa_lead_id?: string
+          laundry_needed?: boolean | null
+          lost_reason?: string | null
+          max_rent?: number | null
+          min_bedrooms?: number | null
+          move_date?: string | null
+          move_date_flexible?: boolean
+          parking_needed?: boolean | null
+          pets?: Json
+          pipeline_stage?: string
+          preferred_bedrooms?: number | null
+          target_locations?: string[]
+          tour_availability?: Json
+          unit_style?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_inquiries_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "distressed_investor_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "rental_inquiries_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "isa_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_inquiries_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "isa_pipeline"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_inquiries_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "landlord_leasing_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "rental_inquiries_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads_needing_module_triage"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_inquiries_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "rental_leasing_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "rental_inquiries_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "residential_sale_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+        ]
+      }
+      landlord_leads: {
+        Row: {
+          city: string | null
+          county: string | null
+          created_at: string
+          current_status: string | null
+          expected_rent: number | null
+          id: string
+          isa_lead_id: string
+          leasing_need: string | null
+          lost_reason: string | null
+          notes: string | null
+          owner_id: string | null
+          pipeline_stage: string
+          preferred_contact_method: string | null
+          property_address: string | null
+          state: string | null
+          unit_count: number | null
+          unit_details: Json
+          updated_at: string
+          vacancy_date: string | null
+          zip: string | null
+        }
+        Insert: {
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          current_status?: string | null
+          expected_rent?: number | null
+          id?: string
+          isa_lead_id: string
+          leasing_need?: string | null
+          lost_reason?: string | null
+          notes?: string | null
+          owner_id?: string | null
+          pipeline_stage?: string
+          preferred_contact_method?: string | null
+          property_address?: string | null
+          state?: string | null
+          unit_count?: number | null
+          unit_details?: Json
+          updated_at?: string
+          vacancy_date?: string | null
+          zip?: string | null
+        }
+        Update: {
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          current_status?: string | null
+          expected_rent?: number | null
+          id?: string
+          isa_lead_id?: string
+          leasing_need?: string | null
+          lost_reason?: string | null
+          notes?: string | null
+          owner_id?: string | null
+          pipeline_stage?: string
+          preferred_contact_method?: string | null
+          property_address?: string | null
+          state?: string | null
+          unit_count?: number | null
+          unit_details?: Json
+          updated_at?: string
+          vacancy_date?: string | null
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landlord_leads_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "distressed_investor_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "landlord_leads_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "isa_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "landlord_leads_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "isa_pipeline"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "landlord_leads_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "landlord_leasing_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "landlord_leads_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads_needing_module_triage"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "landlord_leads_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "rental_leasing_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "landlord_leads_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: true
+            referencedRelation: "residential_sale_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "landlord_leads_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "owners"
+            referencedColumns: ["owner_id"]
+          },
+        ]
+      }
+      rental_units: {
+        Row: {
+          address: string
+          amenities: string[]
+          application_instructions: string | null
+          assigned_agent_id: string | null
+          available_date: string | null
+          bathrooms: number | null
+          bedrooms: number | null
+          building_id: string | null
+          city: string | null
+          county: string | null
+          created_at: string
+          description: string | null
+          estimated_move_in_costs: number | null
+          fee_structure: Json
+          floor_plan_url: string | null
+          furnished_status: string | null
+          id: string
+          landlord_lead_id: string | null
+          last_verified_at: string | null
+          lat: number | null
+          laundry: string | null
+          lease_term_options: string[]
+          listing_expiration_date: string | null
+          listing_source: string | null
+          listing_status: string
+          lng: number | null
+          monthly_rent: number | null
+          neighborhood: string | null
+          owner_id: string | null
+          parking: string | null
+          pet_policy: string | null
+          photos: string[]
+          showing_instructions: string | null
+          square_footage: number | null
+          state: string
+          unit_number: string | null
+          updated_at: string
+          video_url: string | null
+          zip: string | null
+        }
+        Insert: {
+          address: string
+          amenities?: string[]
+          application_instructions?: string | null
+          assigned_agent_id?: string | null
+          available_date?: string | null
+          bathrooms?: number | null
+          bedrooms?: number | null
+          building_id?: string | null
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          description?: string | null
+          estimated_move_in_costs?: number | null
+          fee_structure?: Json
+          floor_plan_url?: string | null
+          furnished_status?: string | null
+          id?: string
+          landlord_lead_id?: string | null
+          last_verified_at?: string | null
+          lat?: number | null
+          laundry?: string | null
+          lease_term_options?: string[]
+          listing_expiration_date?: string | null
+          listing_source?: string | null
+          listing_status?: string
+          lng?: number | null
+          monthly_rent?: number | null
+          neighborhood?: string | null
+          owner_id?: string | null
+          parking?: string | null
+          pet_policy?: string | null
+          photos?: string[]
+          showing_instructions?: string | null
+          square_footage?: number | null
+          state?: string
+          unit_number?: string | null
+          updated_at?: string
+          video_url?: string | null
+          zip?: string | null
+        }
+        Update: {
+          address?: string
+          amenities?: string[]
+          application_instructions?: string | null
+          assigned_agent_id?: string | null
+          available_date?: string | null
+          bathrooms?: number | null
+          bedrooms?: number | null
+          building_id?: string | null
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          description?: string | null
+          estimated_move_in_costs?: number | null
+          fee_structure?: Json
+          floor_plan_url?: string | null
+          furnished_status?: string | null
+          id?: string
+          landlord_lead_id?: string | null
+          last_verified_at?: string | null
+          lat?: number | null
+          laundry?: string | null
+          lease_term_options?: string[]
+          listing_expiration_date?: string | null
+          listing_source?: string | null
+          listing_status?: string
+          lng?: number | null
+          monthly_rent?: number | null
+          neighborhood?: string | null
+          owner_id?: string | null
+          parking?: string | null
+          pet_policy?: string | null
+          photos?: string[]
+          showing_instructions?: string | null
+          square_footage?: number | null
+          state?: string
+          unit_number?: string | null
+          updated_at?: string
+          video_url?: string | null
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_units_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_commission_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "rental_units_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "team_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_units_landlord_lead_id_fkey"
+            columns: ["landlord_lead_id"]
+            isOneToOne: false
+            referencedRelation: "landlord_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_units_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "owners"
+            referencedColumns: ["owner_id"]
+          },
+        ]
+      }
+      rental_matches: {
+        Row: {
+          created_at: string
+          final_result: string | null
+          fit_score: number | null
+          id: string
+          match_conflicts: Json
+          match_reasons: Json
+          match_sent_at: string | null
+          recommended_rank: number | null
+          rental_inquiry_id: string
+          rental_unit_id: string
+          renter_response: string | null
+          tour_status: string | null
+        }
+        Insert: {
+          created_at?: string
+          final_result?: string | null
+          fit_score?: number | null
+          id?: string
+          match_conflicts?: Json
+          match_reasons?: Json
+          match_sent_at?: string | null
+          recommended_rank?: number | null
+          rental_inquiry_id: string
+          rental_unit_id: string
+          renter_response?: string | null
+          tour_status?: string | null
+        }
+        Update: {
+          created_at?: string
+          final_result?: string | null
+          fit_score?: number | null
+          id?: string
+          match_conflicts?: Json
+          match_reasons?: Json
+          match_sent_at?: string | null
+          recommended_rank?: number | null
+          rental_inquiry_id?: string
+          rental_unit_id?: string
+          renter_response?: string | null
+          tour_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_matches_rental_inquiry_id_fkey"
+            columns: ["rental_inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "rental_inquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_matches_rental_unit_id_fkey"
+            columns: ["rental_unit_id"]
+            isOneToOne: false
+            referencedRelation: "rental_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tours: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          rental_inquiry_id: string
+          rental_unit_id: string
+          scheduled_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          rental_inquiry_id: string
+          rental_unit_id: string
+          scheduled_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          rental_inquiry_id?: string
+          rental_unit_id?: string
+          scheduled_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tours_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_commission_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "tours_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "team_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tours_rental_inquiry_id_fkey"
+            columns: ["rental_inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "rental_inquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tours_rental_unit_id_fkey"
+            columns: ["rental_unit_id"]
+            isOneToOne: false
+            referencedRelation: "rental_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_applications: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          id: string
+          notes: string | null
+          rental_inquiry_id: string
+          rental_unit_id: string
+          status: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          notes?: string | null
+          rental_inquiry_id: string
+          rental_unit_id: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          notes?: string | null
+          rental_inquiry_id?: string
+          rental_unit_id?: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_applications_rental_inquiry_id_fkey"
+            columns: ["rental_inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "rental_inquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_applications_rental_unit_id_fkey"
+            columns: ["rental_unit_id"]
+            isOneToOne: false
+            referencedRelation: "rental_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_source_events: {
+        Row: {
+          ad_creative_id: string | null
+          campaign: string | null
+          conversion_outcome: string | null
+          cost_cents: number | null
+          created_at: string
+          first_touch_at: string | null
+          id: string
+          isa_lead_id: string | null
+          landing_page: string | null
+          latest_touch_at: string | null
+          phone_tracking_number: string | null
+          qr_code_id: string | null
+          referrer_url: string | null
+          relocation_partner_id: string | null
+          rental_unit_id: string | null
+          session_id: string | null
+          source_channel: string | null
+          source_platform: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          ad_creative_id?: string | null
+          campaign?: string | null
+          conversion_outcome?: string | null
+          cost_cents?: number | null
+          created_at?: string
+          first_touch_at?: string | null
+          id?: string
+          isa_lead_id?: string | null
+          landing_page?: string | null
+          latest_touch_at?: string | null
+          phone_tracking_number?: string | null
+          qr_code_id?: string | null
+          referrer_url?: string | null
+          relocation_partner_id?: string | null
+          rental_unit_id?: string | null
+          session_id?: string | null
+          source_channel?: string | null
+          source_platform?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          ad_creative_id?: string | null
+          campaign?: string | null
+          conversion_outcome?: string | null
+          cost_cents?: number | null
+          created_at?: string
+          first_touch_at?: string | null
+          id?: string
+          isa_lead_id?: string | null
+          landing_page?: string | null
+          latest_touch_at?: string | null
+          phone_tracking_number?: string | null
+          qr_code_id?: string | null
+          referrer_url?: string | null
+          relocation_partner_id?: string | null
+          rental_unit_id?: string | null
+          session_id?: string | null
+          source_channel?: string | null
+          source_platform?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_source_events_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "distressed_investor_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "lead_source_events_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "isa_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_source_events_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "isa_pipeline"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_source_events_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "landlord_leasing_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "lead_source_events_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_needing_module_triage"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_source_events_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "rental_leasing_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "lead_source_events_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "residential_sale_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "lead_source_events_relocation_partner_id_fkey"
+            columns: ["relocation_partner_id"]
+            isOneToOne: false
+            referencedRelation: "relocation_partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_source_events_rental_unit_id_fkey"
+            columns: ["rental_unit_id"]
+            isOneToOne: false
+            referencedRelation: "rental_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_tasks: {
+        Row: {
+          assigned_agent_id: string | null
+          completed_at: string | null
+          created_at: string
+          due_at: string | null
+          id: string
+          isa_lead_id: string
+          notes: string | null
+          status: string
+          task_type: string
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          isa_lead_id: string
+          notes?: string | null
+          status?: string
+          task_type: string
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          isa_lead_id?: string
+          notes?: string | null
+          status?: string
+          task_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_tasks_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_commission_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "team_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "distressed_investor_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "isa_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "isa_pipeline"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "landlord_leasing_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_needing_module_triage"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "rental_leasing_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+          {
+            foreignKeyName: "lead_tasks_isa_lead_id_fkey"
+            columns: ["isa_lead_id"]
+            isOneToOne: false
+            referencedRelation: "residential_sale_pipeline"
+            referencedColumns: ["isa_lead_id"]
+          },
+        ]
+      }
       agent_contacts: {
         Row: {
           created_at: string | null
@@ -3792,6 +5027,213 @@ export type Database = {
       }
     }
     Views: {
+      distressed_investor_pipeline: {
+        Row: {
+          assigned_agent_id: string | null
+          bant_score: number | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          isa_lead_id: string | null
+          market: string | null
+          motivation_score: number | null
+          outreach_status: string | null
+          phone: string | null
+          routing: string | null
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          bant_score?: number | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          isa_lead_id?: string | null
+          market?: string | null
+          motivation_score?: number | null
+          outreach_status?: string | null
+          phone?: string | null
+          routing?: string | null
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          bant_score?: number | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          isa_lead_id?: string | null
+          market?: string | null
+          motivation_score?: number | null
+          outreach_status?: string | null
+          phone?: string | null
+          routing?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_commission_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "team_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      residential_sale_pipeline: {
+        Row: {
+          assigned_agent_id: string | null
+          bant_score: number | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          isa_lead_id: string | null
+          lead_role: string | null
+          market: string | null
+          motivation_score: number | null
+          outreach_status: string | null
+          phone: string | null
+          routing: string | null
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          bant_score?: number | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          isa_lead_id?: string | null
+          lead_role?: string | null
+          market?: string | null
+          motivation_score?: number | null
+          outreach_status?: string | null
+          phone?: string | null
+          routing?: string | null
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          bant_score?: number | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          isa_lead_id?: string | null
+          lead_role?: string | null
+          market?: string | null
+          motivation_score?: number | null
+          outreach_status?: string | null
+          phone?: string | null
+          routing?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_commission_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "team_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_leasing_pipeline: {
+        Row: {
+          ai_confidence: number | null
+          ai_escalation_needed: boolean | null
+          assigned_agent_id: string | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          isa_lead_id: string | null
+          market: string | null
+          max_rent: number | null
+          min_bedrooms: number | null
+          move_date: string | null
+          outreach_status: string | null
+          phone: string | null
+          pipeline_stage: string | null
+          routing: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_commission_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "team_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      landlord_leasing_pipeline: {
+        Row: {
+          assigned_agent_id: string | null
+          created_at: string | null
+          email: string | null
+          expected_rent: number | null
+          full_name: string | null
+          isa_lead_id: string | null
+          market: string | null
+          phone: string | null
+          pipeline_stage: string | null
+          property_address: string | null
+          vacancy_date: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_commission_summary"
+            referencedColumns: ["agent_id"]
+          },
+          {
+            foreignKeyName: "isa_leads_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "team_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads_needing_module_triage: {
+        Row: {
+          created_at: string | null
+          full_name: string | null
+          id: string | null
+          market: string | null
+          segment: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          market?: string | null
+          segment?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          market?: string | null
+          segment?: string | null
+        }
+        Relationships: []
+      }
       active_locks: {
         Row: {
           blocked_pid: number | null
