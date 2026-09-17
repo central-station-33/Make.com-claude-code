@@ -24,6 +24,24 @@ const SEGMENT_CONTEXT: Record<string, string> = {
   developer:          'developer or builder evaluating land and project opportunities',
   expat_relocation:   'professional relocating to the NYC/NJ metro area',
   film_tv:            'film/TV production professional needing housing near set',
+  homeowner:          'homeowner who may be open to selling their property',
+  renter:             'renter looking for an apartment or home in NY/NJ',
+};
+
+// Module -> public brand. distressed_investor stays InRange (internal
+// wholesale/acquisitions channel); every consumer-facing residential and
+// rental touchpoint uses the public brokerage brand. This is a default —
+// override by passing `brand` explicitly in the payload if a specific
+// campaign needs something else.
+const MODULE_BRAND: Record<string, string> = {
+  distressed_investor: 'InRange',
+  residential_sale:    'Jet Realty Advisors',
+  rental_leasing:       'Jet Realty Advisors',
+};
+
+const LEAD_ROLE_CONTEXT: Record<string, string> = {
+  renter:   'looking for a rental in NY/NJ',
+  landlord: 'a property owner who needs leasing/tenant-placement help',
 };
 
 serve(async (req) => {
@@ -40,6 +58,12 @@ serve(async (req) => {
     market  = 'nyc',
     channel = 'sms',
     source_name, source_url,
+    module: moduleParam,
+    lead_role: leadRoleParam,
+    sms_consent = false,
+    marketing_consent = false,
+    consent_source,
+    brand: brandOverride,
   } = body;
 
   if (!phone && !email) return json({ error: 'phone or email required' }, 400);
@@ -47,10 +71,10 @@ serve(async (req) => {
   const supabase = getServiceClient();
 
   const [{ data: byPhone }, { data: byEmail }] = await Promise.all([
-    phone ? supabase.from('isa_leads').select('id,segment,market,outreach_status,first_response_at')
+    phone ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent')
               .eq('phone', phone).not('outreach_status','in','("dead","closed")').maybeSingle()
           : Promise.resolve({ data: null }),
-    email ? supabase.from('isa_leads').select('id,segment,market,outreach_status,first_response_at')
+    email ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent')
               .eq('email', email).not('outreach_status','in','("dead","closed")').maybeSingle()
           : Promise.resolve({ data: null }),
   ]);
@@ -61,22 +85,37 @@ serve(async (req) => {
 
   if (existing) {
     leadId = existing.id;
+    // A consent flag passed on a follow-up touch strengthens (never weakens) what's on file.
+    if (sms_consent || marketing_consent) {
+      await supabase.from('isa_leads').update({
+        ...(sms_consent && { sms_consent: true }),
+        ...(marketing_consent && { marketing_consent: true }),
+        ...(consent_source && { consent_source }),
+        consent_captured_at: new Date().toISOString(),
+      }).eq('id', leadId);
+    }
   } else {
     const { data: created, error: insertErr } = await supabase
       .from('isa_leads')
       .insert({
         segment, market,
-        commission_source:  'inrange_generated',
-        full_name:           name ?? 'Inbound Lead',
+        module:               moduleParam ?? null,
+        lead_role:            leadRoleParam ?? null,
+        commission_source:    'inrange_generated',
+        full_name:            name ?? 'Inbound Lead',
         phone, email,
-        inbound_channel:    channel,
+        inbound_channel:      channel,
         inbound_message,
-        outreach_status:    'new',
-        routing:            'new',
-        source_name:        source_name ?? channel,
+        outreach_status:      'new',
+        routing:              'new',
+        source_name:          source_name ?? channel,
         source_url,
-        motivation_signals: [`Inbound ${source_name ?? channel} inquiry — auto-responded`],
-        raw_data:           { inbound_message, channel, received_at: new Date().toISOString() },
+        sms_consent:          !!sms_consent,
+        marketing_consent:    !!marketing_consent,
+        consent_source:       consent_source ?? null,
+        consent_captured_at:  (sms_consent || marketing_consent) ? new Date().toISOString() : null,
+        motivation_signals:   [`Inbound ${source_name ?? channel} inquiry — auto-responded`],
+        raw_data:             { inbound_message, channel, received_at: new Date().toISOString() },
       })
       .select('id')
       .single();
@@ -88,17 +127,31 @@ serve(async (req) => {
 
   const effectiveSegment = (existing?.segment ?? segment) as string;
   const effectiveMarket  = (existing?.market  ?? market)  as string;
+  const effectiveModule  = (existing?.module  ?? moduleParam) as string | null;
+  const effectiveLeadRole = (existing?.lead_role ?? leadRoleParam) as string | null;
   const alreadyResponded = !!(existing?.first_response_at);
+
+  // Consent gate: only auto-text if the lead explicitly opted in (form
+  // checkbox passed through as sms_consent), or they texted us first —
+  // replying to an inbound SMS is not the same as unsolicited outbound
+  // marketing. Everything else (website/email leads with a phone number
+  // but no consent flag) gets a task for a human to reach out by an
+  // allowed channel instead of an automatic text.
+  const hasConsentToText = !!(existing?.sms_consent) || !!sms_consent || channel === 'sms';
+  const brand = brandOverride ?? MODULE_BRAND[effectiveModule ?? ''] ?? 'InRange';
 
   let claudeResult: ClaudeResult | null = null;
   if (ANTHROPIC_API_KEY) {
-    claudeResult = await callClaude({ name, inbound_message, segment: effectiveSegment, market: effectiveMarket, isNewLead, alreadyResponded });
+    claudeResult = await callClaude({
+      name, inbound_message, segment: effectiveSegment, leadRole: effectiveLeadRole,
+      market: effectiveMarket, isNewLead, alreadyResponded, brand,
+    });
   }
 
-  const smsText = claudeResult?.sms_response ?? fallbackSms(name, effectiveMarket);
+  const smsText = claudeResult?.sms_response ?? fallbackSms(name, effectiveMarket, brand);
 
   let smsSent = false;
-  if (phone && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER) {
+  if (phone && hasConsentToText && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER) {
     const twilioRes = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
       {
@@ -113,6 +166,15 @@ serve(async (req) => {
     smsSent = twilioRes.ok;
   }
 
+  if (phone && !hasConsentToText) {
+    await supabase.from('lead_tasks').insert({
+      isa_lead_id: leadId,
+      task_type:   'manual_first_contact_no_sms_consent',
+      status:      'open',
+      notes:       `No SMS consent on file — reach out by phone/email instead. Drafted message: "${smsText}"`,
+    });
+  }
+
   const { data: touchNum } = await supabase.rpc('next_touch_number', { p_lead_id: leadId });
 
   await supabase.from('lead_touches').insert({
@@ -120,7 +182,7 @@ serve(async (req) => {
     touch_number: touchNum ?? 1,
     channel,
     outcome:      'no_answer',
-    notes:        `Auto-responded: "${smsText.slice(0, 120)}"`,
+    notes:        smsSent ? `Auto-responded: "${smsText.slice(0, 120)}"` : `Drafted (not sent — no consent): "${smsText.slice(0, 120)}"`,
     isa_name:     'InRange Auto',
     touched_at:   new Date().toISOString(),
   });
@@ -140,7 +202,11 @@ serve(async (req) => {
 
   await supabase.from('isa_leads').update(updates).eq('id', leadId);
 
-  return json({ success: true, lead_id: leadId, is_new_lead: isNewLead, sms_sent: smsSent, response_text: smsText, routing: claudeResult?.routing ?? 'new', bant_score: claudeResult?.bant_score ?? null });
+  return json({
+    success: true, lead_id: leadId, is_new_lead: isNewLead, sms_sent: smsSent,
+    sms_skipped_no_consent: !!phone && !hasConsentToText,
+    response_text: smsText, brand, routing: claudeResult?.routing ?? 'new', bant_score: claudeResult?.bant_score ?? null,
+  });
 });
 
 interface ClaudeResult {
@@ -152,18 +218,22 @@ interface ClaudeResult {
   routing: string;
 }
 
-async function callClaude(params: { name?: string; inbound_message?: string; segment: string; market: string; isNewLead: boolean; alreadyResponded: boolean }): Promise<ClaudeResult | null> {
-  const { name, inbound_message, segment, market, isNewLead, alreadyResponded } = params;
-  const ctx = SEGMENT_CONTEXT[segment] ?? segment;
-  const prompt = `You are an ISA at InRange Real Estate, top NYC/NJ brokerage.
+async function callClaude(params: {
+  name?: string; inbound_message?: string; segment: string; leadRole?: string | null;
+  market: string; isNewLead: boolean; alreadyResponded: boolean; brand: string;
+}): Promise<ClaudeResult | null> {
+  const { name, inbound_message, segment, leadRole, market, isNewLead, alreadyResponded, brand } = params;
+  const ctx = (leadRole && LEAD_ROLE_CONTEXT[leadRole]) ?? SEGMENT_CONTEXT[segment] ?? segment;
+  const prompt = `You are an ISA at ${brand}, a top NYC/NJ brokerage.
 A ${ctx} just contacted you${alreadyResponded ? ' again' : ' for the first time'}.
 Lead name: ${name ?? 'Unknown'}
 Market: ${market.toUpperCase()}
 Their message: "${inbound_message ?? 'No message — form/portal submission'}"
 Return ONLY valid JSON:
-{"sms_response":"<under 160 chars, warm/direct, ends with one question about timeline or availability, sign off '— InRange', no emojis>","ai_summary":"<2 sentences: who this is + why they need real estate NOW>","isa_talking_points":["<point 1>","<point 2>","<point 3>"],"bant_score":<0-12>,"motivation_score":<1-5>,"routing":"<hot|warm|nurture|cold>"}
+{"sms_response":"<under 160 chars, warm/direct, ends with one question about timeline or availability, sign off '— ${brand}', no emojis>","ai_summary":"<2 sentences: who this is + why they need real estate NOW>","isa_talking_points":["<point 1>","<point 2>","<point 3>"],"bant_score":<0-12>,"motivation_score":<1-5>,"routing":"<hot|warm|nurture|cold>"}
 ROUTING: hot=bant≥9+motivation≥4 | warm=bant≥7 OR motivation≥3 | nurture=bant≥4 | cold=else
-Inbound leads score at least 2 higher than outbound.`;
+Inbound leads score at least 2 higher than outbound.
+Never state or imply anything about a neighborhood's schools, crime, safety, or the kind of people who live there, and never mention or infer race, religion, national origin, family status, disability, or other protected characteristics — this is a fair-housing requirement, not a style preference.`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -184,9 +254,9 @@ Inbound leads score at least 2 higher than outbound.`;
   } catch { return null; }
 }
 
-function fallbackSms(name?: string, market = 'nyc'): string {
+function fallbackSms(name?: string, market = 'nyc', brand = 'InRange'): string {
   const area = market === 'nj' ? 'NJ' : 'NYC & NJ';
-  return `Hi${name ? ` ${name}` : ''}, thanks for reaching out to InRange — we cover ${area}. When's a good time for a quick call this week? — InRange`;
+  return `Hi${name ? ` ${name}` : ''}, thanks for reaching out to ${brand} — we cover ${area}. When's a good time for a quick call this week? — ${brand}`;
 }
 
 function json(body: unknown, status = 200): Response {
