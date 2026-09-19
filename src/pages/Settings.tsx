@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -79,6 +80,7 @@ const Settings = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <BackButton to="/dashboard" />
       <Card>
         <CardHeader>
           <CardTitle>Settings</CardTitle>

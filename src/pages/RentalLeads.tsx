@@ -5,7 +5,7 @@ import { inrange } from '@/integrations/supabase/inrange';
 import {
   RentalLeadSummary, RentalPipelineStage, RENTAL_STAGE_LABELS, RENTAL_STAGE_COLORS,
 } from '@/types/leasing';
-import { Loader2, Home, AlertTriangle, Search, ChevronRight, Calendar, DollarSign } from 'lucide-react';
+import { Loader2, Home, AlertTriangle, Search, ChevronRight, Calendar, DollarSign, ArrowLeft } from 'lucide-react';
 
 type StageFilter = 'all' | RentalPipelineStage;
 type MarketFilter = 'all' | 'nyc' | 'nj';
@@ -118,10 +118,15 @@ export default function RentalLeads() {
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="px-4 pt-3 pb-2">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="text-lg font-bold text-gray-900 dark:text-white">
-              Rental Leads
-              <span className="ml-2 text-sm font-normal text-gray-400">({filtered.length} results)</span>
-            </h1>
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate('/dashboard')} className="text-gray-500 dark:text-gray-400 p-1 -ml-1">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white">
+                Rental Leads
+                <span className="ml-2 text-sm font-normal text-gray-400">({filtered.length} results)</span>
+              </h1>
+            </div>
             <button onClick={() => refetch()} className="text-xs text-blue-600 dark:text-blue-400 font-medium">
               Refresh
             </button>

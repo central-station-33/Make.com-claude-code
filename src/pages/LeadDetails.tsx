@@ -8,6 +8,7 @@ import { LeadSourceCard } from "@/components/leads/details/LeadSourceCard";
 import { LeadMessaging } from "@/components/leads/messaging/LeadMessaging";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
+import { BackButton } from "@/components/BackButton";
 
 const LeadDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -34,7 +35,7 @@ const LeadDetails = () => {
           title: "Lead not found",
           description: "The requested lead does not exist or you don't have permission to view it."
         });
-        navigate('/leads');
+        navigate('/dashboard');
         return null;
       }
 
@@ -60,6 +61,7 @@ const LeadDetails = () => {
 
   return (
     <div className="container mx-auto p-4 space-y-6">
+      <BackButton to="/dashboard" />
       <h1 className="text-2xl font-bold">{lead.name}</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">
