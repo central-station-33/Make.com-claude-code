@@ -1,0 +1,1 @@
+{"id":6188683,"name":"ZZ Temp – Coop Field Diagnostic","scheduling":{"type":"on-demand"},"blueprint":{"flow":[{"id":1,"mapper":{"url":"https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/coop-diag","data":"{}","method":"post"},"module":"http:ActionSendData","version":3}]}}

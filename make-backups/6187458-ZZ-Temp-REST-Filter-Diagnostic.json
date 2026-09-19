@@ -1,0 +1,1 @@
+{"id":6187458,"name":"ZZ Temp – REST Filter Diagnostic","scheduling":{"type":"on-demand"},"blueprint":{"flow":[{"id":1,"mapper":{"url":"https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/rest-diag","data":"{}","method":"post"},"module":"http:ActionSendData","version":3}]}}
