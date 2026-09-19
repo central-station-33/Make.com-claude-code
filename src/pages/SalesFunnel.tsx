@@ -4,6 +4,7 @@ import { SalesFunnelView } from "@/components/sales/SalesFunnelView";
 import LeadList from "@/components/LeadList";
 import { Card } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
 
 const SalesFunnel = () => {
   const { isLoading, error } = useSalesFunnel();
@@ -30,6 +31,7 @@ const SalesFunnel = () => {
     <div className="space-y-8 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
+          <BackButton to="/dashboard" />
           <h2 className="text-3xl font-bold tracking-tight">Sales Funnel</h2>
           <p className="text-muted-foreground">
             Track your lead conversion through the sales pipeline

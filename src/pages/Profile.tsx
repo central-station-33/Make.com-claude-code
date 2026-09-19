@@ -1,4 +1,5 @@
 
+import { BackButton } from '@/components/BackButton';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -74,6 +75,7 @@ const ProfilePage = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <BackButton to="/dashboard" />
       <Card>
         <ProfileHeader />
         <CardContent className="space-y-6">

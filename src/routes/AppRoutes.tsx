@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { AppLayout } from '@/components/AppLayout';
 
 // Lazy load components
 const AuthPage = lazy(() => import(/* webpackChunkName: "auth" */ '@/components/auth/AuthPage'));
@@ -53,8 +54,8 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
     console.log('No session, redirecting to auth');
     return <Navigate to="/" replace />;
   }
-  
-  return <>{children}</>;
+
+  return <AppLayout>{children}</AppLayout>;
 };
 
 export const AppRoutes = () => {

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
 import { InRangeLeadSummary, PriorityTier, LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_COLORS } from '@/types/inrange';
-import { Loader2, MapPin, AlertTriangle, Search, ChevronRight, User } from 'lucide-react';
+import { Loader2, MapPin, AlertTriangle, Search, ChevronRight, User, ArrowLeft } from 'lucide-react';
 
 type TierFilter = 'all' | PriorityTier;
 type StatusFilter = 'all' | LeadStatus;
@@ -186,7 +186,10 @@ export default function InRangeLeads() {
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="px-4 pt-3 pb-2">
           <div className="flex items-center justify-between mb-3">
-            <div>
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate('/inrange')} className="text-gray-500 dark:text-gray-400 p-1 -ml-1">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
               <h1 className="text-lg font-bold text-gray-900 dark:text-white">
                 InRange Leads
                 <span className="ml-2 text-sm font-normal text-gray-400">({filtered.length} results)</span>
