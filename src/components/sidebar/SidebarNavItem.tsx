@@ -7,11 +7,15 @@ interface SidebarNavItemProps {
   path: string;
   icon: LucideIcon;
   label: string;
+  /** Also highlight this item for any nested route under `path` (e.g. /inrange/:id). */
+  matchNested?: boolean;
 }
 
-const SidebarNavItem = ({ path, icon: Icon, label }: SidebarNavItemProps) => {
+const SidebarNavItem = ({ path, icon: Icon, label, matchNested }: SidebarNavItemProps) => {
   const location = useLocation();
-  const isActive = location.pathname === path;
+  const isActive = matchNested
+    ? location.pathname === path || location.pathname.startsWith(`${path}/`)
+    : location.pathname === path;
 
   return (
     <Link
