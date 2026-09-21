@@ -15,6 +15,21 @@
  * stays an explicit decision rather than a side effect of deploying a new
  * prompt.
  *
+ * BUDGET GATE (added 2026-09-21): this is a paid backup path (Gemini is the
+ * free-tier primary; this only fires when Gemini fails a lead), so real
+ * dollars are on the line every time it runs -- and because modules 3-7 in
+ * the Make scenario sit downstream of a per-lead feeder with no aggregator,
+ * this function gets invoked once per lead in a run, not once per run. Every
+ * invocation checks ai_budget_tracker (via increment_ai_budget_spend with
+ * p_amount=0) before doing anything paid; if the current calendar month is
+ * already paused, it returns immediately without calling Anthropic at all --
+ * leads simply stay unenriched (ai_summary null), not errored. After a
+ * successful batch, the function's own actual spend (computed from Claude's
+ * real token usage, including cache discounts) is added atomically via the
+ * same function, which flips paused=true itself once the threshold set in
+ * ai_budget_tracker.pause_threshold_usd is crossed. See that table's comment
+ * for how to resume.
+ *
  * POST body: { limit?: number, segment?: string }
  */
 
@@ -29,10 +44,65 @@ const ENRICH_MODEL = 'claude-sonnet-4-6';
 // Bump on any change to ENRICH_SYSTEM_PROMPT or the requested JSON shape.
 const ENRICH_PROMPT_VERSION = '2026-09-12.structured-v1';
 
+const BUDGET_PROVIDER = 'anthropic';
+
+// Claude Sonnet 4.6 standard API rates, $ per million tokens. Cache reads and
+// 5-minute cache writes are billed at Anthropic's published discount/premium
+// off the base input rate. Update these if Anthropic repricing changes them.
+const PRICE_PER_MTOK = {
+  input:      3.00,
+  output:     15.00,
+  cacheRead:  0.30,
+  cacheWrite: 3.75,
+};
+
 function getServiceClient() {
   const url = Deno.env.get('SUPABASE_URL')!;
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   return createClient(url, key, { auth: { persistSession: false } });
+}
+
+function currentPeriodStart(): string {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+}
+
+/** Reads (and, on p_amount>0, atomically records) this month's Anthropic spend. */
+async function checkOrRecordBudget(
+  supabase: ReturnType<typeof getServiceClient>,
+  amount: number,
+) {
+  const { data, error } = await supabase.rpc('increment_ai_budget_spend', {
+    p_provider: BUDGET_PROVIDER,
+    p_period_start: currentPeriodStart(),
+    p_amount: amount,
+  });
+  if (error) throw new Error(`budget tracker: ${error.message}`);
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    cumulativeCostUsd: Number(row?.cumulative_cost_usd ?? 0),
+    pauseThresholdUsd: Number(row?.pause_threshold_usd ?? 0),
+    paused: Boolean(row?.paused),
+    justPaused: Boolean(row?.just_paused),
+  };
+}
+
+/** Actual $ cost of one Claude call from its real token usage, cache-aware. */
+function callCostUsd(usage: {
+  input: number | null;
+  output: number | null;
+  cacheRead: number | null;
+  cacheWrite: number | null;
+}): number {
+  const cacheRead  = usage.cacheRead  ?? 0;
+  const cacheWrite = usage.cacheWrite ?? 0;
+  const baseInput  = Math.max(0, (usage.input ?? 0) - cacheRead - cacheWrite);
+  return (
+    baseInput  * PRICE_PER_MTOK.input +
+    cacheRead  * PRICE_PER_MTOK.cacheRead +
+    cacheWrite * PRICE_PER_MTOK.cacheWrite +
+    (usage.output ?? 0) * PRICE_PER_MTOK.output
+  ) / 1_000_000;
 }
 
 const ENRICH_SYSTEM_PROMPT = `You are an expert NY/NJ real estate ISA coach with deep knowledge of the local market. Analyze real estate prospects and return structured JSON assessments that ISAs use to prioritize and personalize their outreach.
@@ -100,6 +170,22 @@ serve(async (req) => {
 
   const supabase = getServiceClient();
 
+  // Budget gate FIRST, before touching isa_leads or Anthropic at all. A
+  // paused month means this run does no paid work whatsoever.
+  let budget = await checkOrRecordBudget(supabase, 0);
+  if (budget.paused) {
+    await writeDiagnostic(supabase, {
+      skipped_reason: 'budget_paused',
+      leads_seen: 0,
+      enriched: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      errors: [],
+      budget,
+    });
+    return json({ success: true, data: { enriched: 0, skipped_reason: 'budget_paused', budget } });
+  }
+
   // Newest-first so freshly ingested hot leads get enriched within hours.
   const pending = (max: number) => supabase
     .from('isa_leads')
@@ -140,24 +226,33 @@ serve(async (req) => {
   let enriched = 0;
   let inputTokens = 0;
   let outputTokens = 0;
+  let spentThisRun = 0;
+  let budgetTrippedMidRun = false;
   const errors: string[] = [];
-  const anthropicKeyPresent = ANTHROPIC_API_KEY.length > 0;
 
   for (const lead of leads) {
+    // Re-check locally (cheap, no DB round trip) so a run doesn't blow well
+    // past the threshold before its post-loop settle-up catches up.
+    if (budget.cumulativeCostUsd + spentThisRun >= budget.pauseThresholdUsd) {
+      budgetTrippedMidRun = true;
+      break;
+    }
+
     try {
       const { result, usage } = await callClaude(buildPrompt(lead));
+      spentThisRun += callCostUsd(usage);
 
       // Clamp before writing. The columns carry CHECK constraints, so an
       // out-of-range number from the model would fail the whole update and
       // lose an assessment already paid for.
-      const budget    = clampInt(result.bant?.budget    ?? result.bant_budget,    0, 3);
+      const budgetScore    = clampInt(result.bant?.budget    ?? result.bant_budget,    0, 3);
       const authority = clampInt(result.bant?.authority ?? result.bant_authority, 0, 3);
       const need      = clampInt(result.bant?.need      ?? result.bant_need,      0, 3);
       const timing    = clampInt(result.bant?.timing    ?? result.bant_timing,    0, 3);
 
       // Keep the total consistent with the parts it is made of; fall back to a
       // model-supplied total only when the components are missing entirely.
-      const components = [budget, authority, need, timing];
+      const components = [budgetScore, authority, need, timing];
       const bantScore = components.every((c) => c !== null)
         ? components.reduce((a, c) => a + (c as number), 0)
         : clampInt(result.bant_score, 0, 12);
@@ -174,7 +269,7 @@ serve(async (req) => {
         ai_contact_strategy:  result.ai_contact_strategy ?? null,
         isa_talking_points:   Array.isArray(result.isa_talking_points) ? result.isa_talking_points : [],
         ai_risk_flags:        Array.isArray(result.ai_risk_flags) ? result.ai_risk_flags : [],
-        ai_bant_budget:       budget,
+        ai_bant_budget:       budgetScore,
         ai_bant_authority:    authority,
         ai_bant_need:         need,
         ai_bant_timing:       timing,
@@ -200,27 +295,25 @@ serve(async (req) => {
     }
   }
 
+  // Settle up: record this run's real spend atomically. This is the only
+  // call that can actually flip paused=true (the mid-loop check above just
+  // avoids overshooting further once we're already past it locally).
+  if (spentThisRun > 0) {
+    budget = await checkOrRecordBudget(supabase, spentThisRun);
+  }
+
   // Make discards the response body, so persist a diagnostic snapshot -- this
   // is the only way to see per-lead errors outside the HTTP response itself.
-  try {
-    await supabase.from('raw_properties').upsert({
-      property_hash: 'diagnostic_enrich_leads',
-      source: 'diagnostic',
-      raw_data: {
-        ran_at: new Date().toISOString(),
-        model: ENRICH_MODEL,
-        prompt_version: ENRICH_PROMPT_VERSION,
-        anthropic_key_present: anthropicKeyPresent,
-        anthropic_key_len: ANTHROPIC_API_KEY.length,
-        leads_seen: leads.length,
-        enriched,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        errors,
-      },
-      processed_at: new Date().toISOString(),
-    }, { onConflict: 'property_hash' });
-  } catch { /* diagnostics must never break the real response */ }
+  await writeDiagnostic(supabase, {
+    leads_seen: leads.length,
+    enriched,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    errors,
+    budget,
+    spent_this_run_usd: Number(spentThisRun.toFixed(4)),
+    budget_tripped_mid_run: budgetTrippedMidRun,
+  });
 
   return json({ success: true, data: {
     enriched,
@@ -229,8 +322,30 @@ serve(async (req) => {
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     errors,
+    budget,
   } });
 });
+
+async function writeDiagnostic(
+  supabase: ReturnType<typeof getServiceClient>,
+  extra: Record<string, unknown>,
+) {
+  try {
+    await supabase.from('raw_properties').upsert({
+      property_hash: 'diagnostic_enrich_leads',
+      source: 'diagnostic',
+      raw_data: {
+        ran_at: new Date().toISOString(),
+        model: ENRICH_MODEL,
+        prompt_version: ENRICH_PROMPT_VERSION,
+        anthropic_key_present: ANTHROPIC_API_KEY.length > 0,
+        anthropic_key_len: ANTHROPIC_API_KEY.length,
+        ...extra,
+      },
+      processed_at: new Date().toISOString(),
+    }, { onConflict: 'property_hash' });
+  } catch { /* diagnostics must never break the real response */ }
+}
 
 const clampInt = (v: unknown, min: number, max: number): number | null => {
   const n = Math.round(Number(v));
@@ -304,8 +419,10 @@ async function callClaude(prompt: string) {
   return {
     result: JSON.parse(stripped.slice(start, end + 1)),
     usage: {
-      input:  data.usage?.input_tokens  ?? null,
-      output: data.usage?.output_tokens ?? null,
+      input:      data.usage?.input_tokens              ?? null,
+      output:     data.usage?.output_tokens              ?? null,
+      cacheRead:  data.usage?.cache_read_input_tokens     ?? null,
+      cacheWrite: data.usage?.cache_creation_input_tokens ?? null,
     },
   };
 }
