@@ -1,59 +1,338 @@
 {
-  "name": "InRange — 03: AI Enrich + Notify (Daily 6 AM ET)",
+  "name": "InRange – ISA S2: AI Enrich + Notify ISA (All Segments)",
   "flow": [
     {
       "id": 1,
       "module": "http:ActionSendData",
       "version": 3,
-      "parameters": { "handleErrors": true, "useNewZLibDecompression": true },
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
       "mapper": {
-        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/enrich-pending",
-        "serializeUrl": false,
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/list-pending-enrichment",
+        "data": "{\"limit\": 50}",
+        "gzip": false,
         "method": "post",
         "headers": [
-          { "name": "x-make-secret", "value": "YOUR_MAKE_WEBHOOK_SECRET" },
-          { "name": "Content-Type", "value": "application/json" }
+          {
+            "name": "Authorization",
+            "value": "Bearer {{env.SUPABASE_ANON_KEY}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "x-make-secret",
+            "value": "{{env.MAKE_WEBHOOK_SECRET}}"
+          }
         ],
-        "qs": [],
+        "timeout": 30,
+        "useMtls": false,
         "bodyType": "raw",
         "contentType": "application/json",
-        "body": "{\"limit\":20}",
+        "serializeUrl": false,
+        "shareCookies": false,
         "parseResponse": true,
-        "responsetype": "json",
-        "timeout": 300000,
-        "rejectUnauthorized": true,
-        "followRedirect": true
+        "followRedirect": true,
+        "useQuerystring": false,
+        "followAllRedirects": false,
+        "rejectUnauthorized": true
       },
-      "metadata": { "designer": { "x": -300, "y": 0 } }
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
     },
     {
-      "_comment": "notify-subscribers step removed — function does not exist yet. Add notification (email/SMS) here when built.",
       "id": 2,
-      "module": "builtin:SetVariable",
+      "module": "builtin:BasicFeeder",
       "version": 1,
       "parameters": {},
-      "mapper": { "name": "placeholder", "value": "Notification step pending implementation" },
-      "metadata": { "designer": { "x": 0, "y": 0 } }
+      "mapper": {
+        "array": "{{1.data.data.leads}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "gemini-ai:createACompletionGeminiPro",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": 11136478
+      },
+      "mapper": {
+        "model": "gemini-flash-latest",
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "type": "text",
+                "text": "{{2.prompt}}"
+              }
+            ]
+          }
+        ],
+        "system_instruction": {
+          "parts": [
+            {
+              "text": "{{1.data.data.system_prompt}}"
+            }
+          ]
+        },
+        "generationConfig": {
+          "responseMimeType": "application/json"
+        }
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 99,
+          "module": "builtin:Ignore",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 600,
+              "y": 200
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/write-enrichment",
+        "gzip": false,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{env.SUPABASE_ANON_KEY}}"
+          },
+          {
+            "name": "x-make-secret",
+            "value": "{{env.MAKE_WEBHOOK_SECRET}}"
+          }
+        ],
+        "timeout": 30,
+        "useMtls": false,
+        "bodyType": "x_www_form_urlencoded",
+        "formFields": [
+          {
+            "key": "lead_id",
+            "value": "{{2.id}}"
+          },
+          {
+            "key": "ai_model",
+            "value": "gemini-flash-latest"
+          },
+          {
+            "key": "raw_text",
+            "value": "{{3.candidates[1].content.parts[1].text}}"
+          },
+          {
+            "key": "input_tokens",
+            "value": "{{3.usageMetadata.promptTokenCount}}"
+          },
+          {
+            "key": "output_tokens",
+            "value": "{{3.usageMetadata.candidatesTokenCount}}"
+          }
+        ],
+        "serializeUrl": false,
+        "shareCookies": false,
+        "parseResponse": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "followAllRedirects": false,
+        "rejectUnauthorized": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/enrich-leads",
+        "data": "{\"limit\": 50}",
+        "gzip": false,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{env.SUPABASE_ANON_KEY}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "x-make-secret",
+            "value": "{{env.MAKE_WEBHOOK_SECRET}}"
+          }
+        ],
+        "timeout": 90,
+        "useMtls": false,
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "serializeUrl": false,
+        "shareCookies": false,
+        "parseResponse": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "followAllRedirects": false,
+        "rejectUnauthorized": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/notify-isa",
+        "data": "{\"routing\": \"hot\", \"limit\": 20}",
+        "gzip": false,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{env.SUPABASE_ANON_KEY}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "x-make-secret",
+            "value": "{{env.MAKE_WEBHOOK_SECRET}}"
+          }
+        ],
+        "timeout": 30,
+        "useMtls": false,
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "serializeUrl": false,
+        "shareCookies": false,
+        "parseResponse": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "followAllRedirects": false,
+        "rejectUnauthorized": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 1500,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 7,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/notify-isa",
+        "data": "{\"routing\": \"warm\", \"limit\": 30}",
+        "gzip": false,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{env.SUPABASE_ANON_KEY}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "x-make-secret",
+            "value": "{{env.MAKE_WEBHOOK_SECRET}}"
+          }
+        ],
+        "timeout": 30,
+        "useMtls": false,
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "serializeUrl": false,
+        "shareCookies": false,
+        "parseResponse": false,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "followAllRedirects": false,
+        "rejectUnauthorized": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 1800,
+          "y": 0
+        }
+      }
     }
   ],
   "metadata": {
     "instant": false,
     "version": 1,
+    "designer": {
+      "orphans": []
+    },
     "scenario": {
-      "roundtrips": 1,
+      "dlq": false,
+      "slots": null,
+      "dataloss": false,
       "maxErrors": 3,
       "autoCommit": true,
-      "autoCommitTriggerLast": true,
+      "roundtrips": 1,
       "sequential": true,
       "confidential": false,
-      "dataloss": false,
-      "dlq": false,
-      "freshVariables": false
-    },
-    "designer": { "orphans": [] },
-    "scheduling": {
-      "type": "indefinitely",
-      "interval": 86400
+      "freshVariables": false,
+      "autoCommitTriggerLast": true
     }
   }
 }
