@@ -18,6 +18,50 @@ changed, why, and what `verify_jwt` ended up as if that's part of the change.
 
 ---
 
+## 2026-09-21 23:31 UTC — `ingest-leads` — restored `verify_jwt: false` — Claude Code
+Confirming the "agent unconfirmed" attribution two entries below: that was me.
+I redeployed `ingest-leads` (the comma/ilike fix) without having seen this
+file — it didn't exist in my working set yet — and preserved whatever
+`verify_jwt` the function already had (`true`) rather than checking it against
+convention, silently re-reverting the fix Perplexity Computer made for exactly
+this function ~1 hour before mine (see the 20:23 UTC entry). Deployed v39,
+`verify_jwt: false`, no code change from v38 — just the gateway flag, back to
+matching every sibling function's custom `x-make-secret` auth. Caught this by
+reading this changelog before a *different* deploy (`enrich-leads`) and
+noticing my own earlier entry already existed, written by someone else,
+describing a collision I hadn't known I'd caused. No code diff this time;
+logging so the loop closes.
+
+## 2026-09-21 23:15 UTC — Make scenario "ISA Notify Receiver" (id `5077766`) — added real email delivery — Claude Code
+Built on top of Perplexity Computer's 20:16 UTC fix on this same scenario
+(log-touch module removed) without yet knowing it was theirs — the blueprint
+I read right before editing was already just webhook-in → webhook-respond,
+which matches their fix exactly, so this is additive, not a collision: added
+a `google-email:sendAnEmail` module between the two existing ones, using the
+account's existing Gmail OAuth connection (`jtaffairs@gmail.com`, id
+`11132254`), populated from fields `notify-isa` already assembles (name,
+`ai_summary`, talking points, BANT/motivation scores, contact, commission
+split) but had nowhere to send until now.
+
+Separately found and fixed, not a shared-function code change but relevant to
+anyone else touching this path: `notify-isa` marks a lead
+`outreach_status = 'attempting'` as soon as the webhook call returns 200 —
+and this receiver always returns 200 regardless of what (if anything) happens
+downstream. So every notify attempt before this fix "succeeded" and
+permanently removed the lead from the `'new'` pool `notify-isa` re-queries,
+without anything ever being sent — this is presumably also why the pre-fix
+receiver got away with doing nothing for as long as it did, nothing ever
+errored. Reset the 23 leads (7 hot, 16 warm) this had already stranded back
+to `'new'` and re-ran `notify-isa` for both routings: 23/23 sent, confirmed
+against 23 individual Make executions (`status: 1, operations: 3` each), not
+just the caller's own success count.
+
+Known gaps, not fixed here: SMS and Slack are unbuilt (no Make connection
+exists for either — `notify-isa`'s `sms_message` field is composed and
+unused); the email step hardcodes the one connected address rather than
+routing by the lead's actual `assigned_agent`, so this breaks silently the
+moment a second agent exists.
+
 ## 2026-09-21 21:31 UTC — `ingest-leads` — fixed comma-in-name duplicate-match bug — agent unconfirmed (likely Claude Code)
 Rewrote the duplicate-lookup query: PostgREST's `.or()` reads a bare comma as
 a clause separator, and ACRIS-sourced names routinely contain one (e.g.
