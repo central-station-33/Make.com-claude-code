@@ -18,6 +18,31 @@ changed, why, and what `verify_jwt` ended up as if that's part of the change.
 
 ---
 
+## 2026-09-21 23:35 UTC — `enrich-leads` — derive `routing` from scores instead of trusting the model — Claude Code
+No prior entry in this file touched `enrich-leads` — checked before deploying,
+clear. The function computed `bant_score` correctly from the model's own
+component scores, then separately trusted whatever `routing` string the model
+also returned, if it was one of the four valid values. Checked against all
+172 enriched rows at the time (162 live + 10 in a dedupe backup table):
+151 agreed with the prompt's own stated routing rules, 21 didn't (12%) —
+including identical duplicate rows (same `bant_score`, same
+`motivation_score`) that came back with different `routing` on different
+runs, which is what non-determinism in a business rule looks like from
+outside. Fix: added `deriveRouting(bantScore, motivationScore)`, applying the
+prompt's own four rules in code; the model's `routing` field is still
+requested (prompt unchanged, `ENRICH_PROMPT_VERSION` not bumped) but no
+longer read. Deployed v41, `verify_jwt: false` (matched what was already
+there, no gateway change).
+
+Backfilled the 19 already-wrong live rows from `bant_score`/`motivation_score`
+already stored on each — no re-enrichment, no Anthropic spend. Re-checked
+after: 162/162 agree, 0 violations. Two of the 19 corrections were `hot` →
+`warm` demotions (`Andrew Thomas`, `Tremaine Edmunds`) that had already gone
+out in the real "ISA Notify Receiver" emails sent per the entry above,
+labeled `HOT` when the correct label was `WARM` — the notification itself was
+correct to fire, the urgency label on those two was wrong at send time.
+Noting it here rather than letting it go undocumented.
+
 ## 2026-09-21 23:31 UTC — `ingest-leads` — restored `verify_jwt: false` — Claude Code
 Confirming the "agent unconfirmed" attribution two entries below: that was me.
 I redeployed `ingest-leads` (the comma/ilike fix) without having seen this
