@@ -66,9 +66,9 @@ serve(async (req) => {
   const inputTokens = Number(body.input_tokens) || 0;
   const outputTokens = Number(body.output_tokens) || 0;
 
-  if (!leadId) return json({ success: false, error: 'lead_id is required' }, 400);
-
   const supabase = getServiceClient();
+
+  if (!leadId) return json({ success: false, error: 'lead_id is required' }, 400);
 
   let result: Record<string, unknown>;
   try {
@@ -95,7 +95,7 @@ serve(async (req) => {
 
     const nowIso = new Date().toISOString();
 
-    const { error: updateError } = await supabase.from('isa_leads').update({
+    const { data: updatedRows, error: updateError } = await supabase.from('isa_leads').update({
       ai_summary:           result.ai_summary ?? null,
       ai_investment_thesis: result.ai_investment_thesis ?? null,
       ai_contact_strategy:  result.ai_contact_strategy ?? null,
@@ -115,21 +115,18 @@ serve(async (req) => {
       ai_input_tokens:      inputTokens,
       ai_output_tokens:     outputTokens,
       updated_at:           nowIso,
-    }).eq('id', leadId);
+    }).eq('id', leadId).select('id');
 
     if (updateError) throw new Error(updateError.message);
+    // Postgrest does not error on a zero-row match, so a plain "no error" is not
+    // proof the write landed. Check the returned row count explicitly.
+    if (!updatedRows || updatedRows.length === 0) {
+      return json({ success: false, error: `no isa_leads row matched id ${leadId}` }, 404);
+    }
 
     return json({ success: true, data: { lead_id: leadId, ai_model: aiModel } });
   } catch (e) {
     const msg = (e as Error).message;
-    try {
-      await supabase.from('raw_properties').upsert({
-        property_hash: 'diagnostic_write_enrichment',
-        source: 'diagnostic',
-        raw_data: { ran_at: new Date().toISOString(), lead_id: leadId, ai_model: aiModel, error: msg },
-        processed_at: new Date().toISOString(),
-      }, { onConflict: 'property_hash' });
-    } catch { /* diagnostics must never break the real response */ }
     return json({ success: false, error: msg }, 500);
   }
 });

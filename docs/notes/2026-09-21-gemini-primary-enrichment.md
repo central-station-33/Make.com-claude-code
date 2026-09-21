@@ -48,6 +48,47 @@ Make env var — if it was silently dropped/renamed at the team/org level,
 other scenarios still referencing `{{env.MAKE_WEBHOOK_SECRET}}` may hit the
 same 401 until they're also patched or the env var is restored.
 
+## Second bug found after the 401 fix: scenario reported success but wrote nothing
+
+After the 401 was fixed, S2 ran with `status: 1` (success) every time, but a
+SQL check showed zero `isa_leads` rows had `ai_model`/`ai_enriched_at` set —
+the "successful" runs were writing nothing. Root-caused in three steps:
+
+1. Added unconditional diagnostic logging to `write-enrichment` (writing every
+   incoming call to `raw_properties`). It never fired, even on real S2 runs.
+   Redirecting module 4's URL to a throwaway Make webhook confirmed the same
+   thing outside Supabase entirely: **module 4 never fires**.
+2. Isolating just `list-pending-enrichment → feeder → write-enrichment` (no
+   Gemini in between) worked correctly — the feeder does iterate over real
+   leads, and downstream HTTP modules do run for real. So the break was
+   specifically between the feeder and module 4, i.e. at the Gemini module.
+3. Removing the Gemini module's `onerror: Ignore` handler and re-running
+   exposed the real error Make had been silently swallowing:
+   `[402] Your prepayment credits are depleted.` — the Google AI Studio
+   project behind the Make `gemini-ai` connection (`__IMTCONN__:11136478`)
+   is out of prepaid billing credit. Per Make's own error-handler semantics,
+   "Ignore" discards the *entire bundle* for a failing iteration before it
+   reaches the next module — it does not pass an empty/placeholder value
+   through. So with Gemini failing on every lead, module 4 (and everything
+   chained after it, including the Anthropic backup and notify steps) never
+   ran for any lead, while the scenario as a whole still reported `status: 1`.
+
+**Fix required:** add funds/credits to the Google AI Studio project at
+https://ai.studio/projects (billing action, needs account access — not
+fixable from Make or Supabase). Once credits are restored, S2 should work
+as designed with no further code changes.
+
+**Bug fixed in `write-enrichment` while investigating:** its `isa_leads`
+update used `.update(...).eq('id', leadId)` with no `.select()` — Postgrest
+does not error on a zero-row match, so a bad/stale `lead_id` would silently
+report `success: true` without writing anything. Now selects the updated row
+and returns a `404` if nothing matched.
+
+**Lesson for error handlers:** never attach `Ignore` to a module whose output
+later modules depend on, unless you're fine with those bundles disappearing
+silently. A `Resume` handler with an explicit fallback value (or removing
+the handler so real failures surface) would have caught this immediately.
+
 ## Known gaps (flagged by Claude Code, 2026-09-21)
 Repo `supabase/migrations/` currently has 19 files; the live Supabase
 project reportedly has ~36 migrations applied directly, never committed.
