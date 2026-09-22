@@ -16,7 +16,7 @@
   action across this team's scenarios must explicitly exclude folder 274107;
   when in doubt about whether a given scenario is InRange's, check its name
   and folder before acting on it rather than assuming team-wide scope.
-- **Code Storage:** GitHub (central-station-33/Make.com-claude-code)
+- **Code Storage:** GitHub (`central-station-33/inrange-frontend`)
 - **AI:** Claude API via Anthropic
 
 ## Architecture
@@ -47,31 +47,10 @@ React Dashboard (this repo's src/ — Supabase Auth, direct Supabase connection)
 3. **Celebrities / athletes** (`athlete`, `film_tv`) — deliberately last; do
    not let these crowd out the residential pipeline
 
-Renter/inbound segments (`renter`, `general_inquiry`) are unranked and default
-to tier 2. Renters file no public record, so they arrive only via inbound
-capture (`process-inbound-email`), never via a data source.
-
 Encoded in `_shared/segment-priority.ts` and applied to the two *paid* paths:
 Claude enrichment (`enrich-leads`) and skip tracing (`skip-trace-leads`).
 Unlisted segments default to tier 2. `notify-isa` is deliberately NOT ranked
 by segment — an already-enriched hot lead should reach an ISA on score.
-
-**Known limitation, accepted 2026-09-13:** the free data sources behind this
-pipeline (NYC HPD violations especially) surface mostly LLC/co-op/condo-owned
-buildings, not individual homeowners — confirmed live, only ~5% of properties
-and a similar share of isa_leads homeowner-segment rows have a real individual
-owner. Checked and ruled out as unfixable-for-free: NY/NJ lis
-pendens/foreclosure filings, the obvious better-targeted source, are not
-bulk-queryable for free in either state (ACRIS has no lis pendens document
-type at all — confirmed against its full 126-code list; it's filed with
-county court clerks, a separate system). Decision: keep the free sources as
-they are and rely on individual-vs-entity filtering instead of chasing a
-better source — `properties.owner_kind` (persisted, see
-`_shared/owner-classification.ts`) and the equivalent in-request filter in
-`skip-trace-leads` for `isa_leads`' homeowner segment (which has no persisted
-column to filter on). Revisit only if the user explicitly wants to add a paid
-foreclosure-data vendor as a new CLAUDE.md exception, the same way DataSkip
-was approved for skip tracing.
 
 ## Free Data Sources in Use
 - NYC Open Data (HPD violations, DOB, PLUTO, Evictions)
@@ -79,80 +58,18 @@ was approved for skip tracing.
 - FEMA National Flood Hazard Layer
 - NJ municipal open data portals (Newark, Jersey City, Trenton)
 
-**Bug found and fixed 2026-09-13/14:** `properties.zip` was wrong for most NJ
-rows (`source = 'nj_mod_iv'`). Confirmed live against NJOGIS directly: its
-`ZIP_CODE` and `ZIP5` fields are identical and both hold the *owner's mailing
-zip*, not the property's — this MOD-IV layer is a tax-billing dataset and
-doesn't expose a property zip at all. `ingest-nj` (`toRawRecord`) still maps
-`ZIP_CODE` straight to `zip` on new rows — so it's only coincidentally right
-when the owner lives at the property and wrong whenever they don't (e.g. a
-Jersey City property showing zip 20260/Washington DC for an absentee owner).
-This lands hardest on exactly the properties `contact_likelihood_score`
-favors (out-of-state owner is worth +10 there), so it wasn't a rare edge case
-for this pipeline's own priority rows.
-
-Fix: `backfill-nj-zip` corrects `properties.zip` via the free US Census
-Bureau geocoder (`_shared/geocode.ts`), address-level rather than
-municipality-level — Newark/Jersey City/Elizabeth alone span many zip codes
-each, so a coarse town→zip table would still be wrong for exactly the rows
-that matter most. It targets `zip_geocoded_at IS NULL`, so re-running it
-periodically after `ingest-nj` is the intended way newly-ingested NJ rows get
-corrected too (`ingest-nj` itself is untouched — geocoding inline would slow
-ingestion down). A geocoded zip outside NJ's own range (07xxx/08xxx) is
-rejected rather than written. Backfilled live 2026-09-14: all 450 existing NJ
-properties now carry a valid NJ zip (430 corrected, 20 already valid).
-
 ## Do NOT Suggest
 - Render.com, Railway, Fly.io or any separate hosting
 - Paid data sources (PropStream, BatchLeads, etc.) — **except** paid skip
-  tracing for owner phone/email, explicitly approved 2026-09-08 (see below)
+  tracing for owner phone/email, explicitly approved 2026-09-08
 - Duplicate services that Supabase already provides
-
-## Approved Exception: Paid Skip Tracing
-Owner phone/email has no free bulk source (mailing address, yes; phone/email,
-no). Outreach is call/email/social only — no mail campaigns — so this is
-required, not optional. Vendor: **DataSkip** (dataskip.io) via the
-`skip-trace-leads` edge function, called directly over its documented REST
-API — no third-party CLI/SDK package is installed for this. (BatchData was
-named here 2026-09-08 but an account was never actually opened; that was an
-approval of a vendor concept, never a working integration. DataSkip replaced
-it 2026-09-12 and is the vendor actually in use — do not reintroduce
-BatchData without the user explicitly asking for it again.) This exception
-is scoped to phone/email contact resolution only; the "no paid data sources"
-rule still applies everywhere else.
-
-**Spend approval (set 2026-09-08, small account balance):** never trigger a
-real (non-dry-run) skip-trace run without the user's explicit approval given
-on two separate occasions. This is enforced in the function itself, not just
-by convention — `skip-trace-leads` requires two separate calls (see its
-header doc): a `propose` call that resolves the batch and spends nothing,
-then a later `confirm` call presenting the token that call returned, which
-is the only call that spends money. Never chain propose and confirm together
-in one Make scenario run or one script — the gap between them is where the
-user's second approval belongs. `dry_run: true` is free and requires no
-approval at all.
-
-## Approved Exception: IDX/MLS Comps for ARV
-The user already holds a **SimplyRETS** (IDX/MLS data API) account —
-integrated via the `estimate-arv-comps` edge function to refine
-`properties.estimated_arv` from real recently-sold comparable listings,
-replacing the tax-assessed-value fallback the scoring engine otherwise uses.
-This is a different category of exception than skip tracing: it doesn't
-source leads (the "free sources only" rule for finding distressed properties
-still applies everywhere else) — it prices leads the free sources already
-found, using real market comps instead of a stale tax valuation. No spend-
-approval gate applies (SimplyRETS is a flat account cost, not billed per
-lookup the way DataSkip is), but it does need `SIMPLYRETS_API_KEY` /
-`SIMPLYRETS_API_SECRET` set as Supabase secrets — not set by any Claude
-Code session, since the account credentials are the user's own. Below
-`MIN_COMPS` (3) matching sold comps, `estimated_arv` is left untouched
-rather than written from a low-confidence estimate — see the function's
-header doc for the full method (median $/sqft, size-banded, lookback
-window). Its property_type → SimplyRETS `type` mapping is best-effort;
-properties whose type doesn't map confidently are skipped rather than
-searched unfiltered.
 
 ## Always Ask Before Building
 - Does this already exist in Make.com/Supabase/this repo's React dashboard?
 - Can Supabase Edge Functions handle this instead of a separate server?
 - What's the Supabase project URL for this feature?
+
+## Claude Code repository note
+This is the canonical repository for the InRange frontend. Use the `main` branch
+and the repository root as the project working directory. Do not substitute the
+historical repository name `Make.com-claude-code`.
