@@ -18,6 +18,34 @@ changed, why, and what `verify_jwt` ended up as if that's part of the change.
 
 ---
 
+## 2026-09-22 00:55 UTC — repo renamed `Make.com-claude-code` → `inrange-frontend` — Claude Code (at the project owner's direction)
+Not an edge-function or Make-scenario change, but relevant to anyone working
+from this repo by its old name: the GitHub repo this changelog lives in was
+renamed from `Make.com-claude-code` to `inrange-frontend`. Reason: this repo
+is the actual live InRange dashboard/frontend (`src/pages`, `src/routes`,
+`src/integrations/supabase/inrange.ts` wired to `omzugrtgwsjypekuzgtn`,
+deployed to Vercel project `make-com-claude-code` and aliased to the real
+production domain, `inrange.jetreadvisors.com`) — the old name was a leftover
+scaffold default (`package.json` still says `vite_react_shadcn_ts`) that hid
+this from anyone looking for "the InRange frontend" by name, including this
+session earlier in the day, which spent a round trip treating this repo's
+Vercel deployment as a misconfiguration before reading its actual contents.
+
+GitHub redirects the old name transparently for git and API access (verified:
+both names resolved to the same commit during this change), so existing
+clones and remotes using `Make.com-claude-code` keep working without
+reconfiguration. This commit is itself the verification that the Vercel
+Git integration survived the rename and still triggers a build — if you're
+reading this in the deployed app, it did.
+
+Old name for cross-reference: `central-station-33/Make.com-claude-code`.
+Unrelated repos also named "InRange"-adjacent, for anyone else who hits the
+same confusion this session did: `central-station-33/InRange` (backend
+pipeline only, no frontend) and `central-station-33/nextjs-inrange` (a dead
+`create-next-app` scaffold — not this repo, not deployed anywhere).
+
+---
+
 ## 2026-09-21 21:31 UTC — `ingest-leads` — fixed comma-in-name duplicate-match bug — agent unconfirmed (likely Claude Code)
 Rewrote the duplicate-lookup query: PostgREST's `.or()` reads a bare comma as
 a clause separator, and ACRIS-sourced names routinely contain one (e.g.
