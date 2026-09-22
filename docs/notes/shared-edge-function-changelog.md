@@ -18,6 +18,25 @@ changed, why, and what `verify_jwt` ended up as if that's part of the change.
 
 ---
 
+## 2026-09-21 22:15 UTC — Vercel project `inrange-dashboard` renamed to `inrange-frontend` — Perplexity (assistant)
+Not an edge-function or Make change, but logged here so Claude Code and any
+other agent sharing this repo doesn't get confused by mismatched naming.
+GitHub repo was earlier renamed `Make.com-claude-code` -> `INRANGE-FRONTEND`
+(see commit e8c78568, this repo is the real, live InRange frontend deployed
+to inrange.jetreadvisors.com). The linked Vercel project still carried the
+old name and old deployment metadata/aliases (`make-com-claude-code-*`),
+which could make an agent think there were two separate apps. Renamed the
+Vercel project (`prj_nOePJcq0wPWzE7mxjvktOec2C3sO`, team
+`central-station-33s-projects`) to `inrange-frontend` to match. Verified
+after: custom domain `inrange.jetreadvisors.com` stayed attached/verified,
+Git connection to `main` unaffected, no env vars or build/protection settings
+touched. New system deployment URLs going forward use the
+`inrange-frontend-*.vercel.app` pattern; old `make-com-claude-code-*.vercel.app`
+historical URLs still resolve. See
+`docs/notes/2026-09-21-vercel-project-rename.md` for full detail. If you're
+about to reference "the make-com-claude-code Vercel project" — it's this
+same project, just renamed.
+
 ## 2026-09-21 21:31 UTC — `ingest-leads` — fixed comma-in-name duplicate-match bug — agent unconfirmed (likely Claude Code)
 Rewrote the duplicate-lookup query: PostgREST's `.or()` reads a bare comma as
 a clause separator, and ACRIS-sourced names routinely contain one (e.g.
