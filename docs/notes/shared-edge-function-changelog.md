@@ -18,6 +18,63 @@ changed, why, and what `verify_jwt` ended up as if that's part of the change.
 
 ---
 
+## 2026-09-22 ~03:00 UTC — naming mismatch found and merge-conflict resolved — Claude Code
+Not an edge-function or Make change, but this is the third naming action on
+this repo/Vercel-project pair in about 6 hours and it's now confusing enough
+that it needs its own entry, separate from the two below (kept verbatim,
+not rewritten).
+
+**What's true right now, verified directly** (GitHub API + a real clone +
+live Vercel deployment metadata, not narrative): the **GitHub repo is
+currently named `inrange-dashboard`**, not `inrange-frontend` — renamed
+again after the entry below, by Perplexity, per commits `72c4c89` and
+`81e3e22` on `main` (real timestamps ~02:17–02:19 UTC 2026-09-22, per
+`git log`, not the "2026-09-21 22:15 UTC" the entry below states — that
+header appears to be mislabeled by about 4 hours plus a day, though the
+action it describes is real). The **Vercel project's own display name is
+`inrange-frontend`** (confirmed via `get_project`). So GitHub and Vercel
+disagree again, just swapped from before: GitHub now has the name Vercel
+had, and vice versa.
+
+The entry below also states the Vercel project's pre-rename name was
+`inrange-dashboard` — I can't reconcile that with this session's own
+repeated, direct observations: `get_project` on this same project id
+(`prj_nOePJcq0wPWzE7mxjvktOec2C3sO`) returned `make-com-claude-code`
+continuously all session, right up until it changed to `inrange-frontend`
+immediately after the GitHub rename in the entry below the one below this.
+Not asserting the entry below is wrong — flagging that the two accounts
+don't line up, for whoever sorts this out next.
+
+Reported to the project owner; no further rename made unilaterally. This
+commit merges `main` into this PR's branch to resolve the conflict the two
+changelog entries below created (both inserted at the top of the same
+file) — content of both preserved as-is, just reordered by actual
+chronology (the entry below dated 22:15 UTC actually happened after the
+one below that, per its own commit's real timestamp).
+
+---
+
+## 2026-09-21 22:15 UTC — Vercel project `inrange-dashboard` renamed to `inrange-frontend` — Perplexity (assistant)
+Not an edge-function or Make change, but logged here so Claude Code and any
+other agent sharing this repo doesn't get confused by mismatched naming.
+GitHub repo was earlier renamed `Make.com-claude-code` -> `INRANGE-FRONTEND`
+(see commit e8c78568, this repo is the real, live InRange frontend deployed
+to inrange.jetreadvisors.com). The linked Vercel project still carried the
+old name and old deployment metadata/aliases (`make-com-claude-code-*`),
+which could make an agent think there were two separate apps. Renamed the
+Vercel project (`prj_nOePJcq0wPWzE7mxjvktOec2C3sO`, team
+`central-station-33s-projects`) to `inrange-frontend` to match. Verified
+after: custom domain `inrange.jetreadvisors.com` stayed attached/verified,
+Git connection to `main` unaffected, no env vars or build/protection settings
+touched. New system deployment URLs going forward use the
+`inrange-frontend-*.vercel.app` pattern; old `make-com-claude-code-*.vercel.app`
+historical URLs still resolve. See
+`docs/notes/2026-09-21-vercel-project-rename.md` for full detail. If you're
+about to reference "the make-com-claude-code Vercel project" — it's this
+same project, just renamed.
+
+---
+
 ## 2026-09-22 00:55 UTC — repo renamed `Make.com-claude-code` → `inrange-frontend` — Claude Code (at the project owner's direction)
 Not an edge-function or Make-scenario change, but relevant to anyone working
 from this repo by its old name: the GitHub repo this changelog lives in was
