@@ -8,12 +8,16 @@ attempted — see the entry at
 `docs/notes/shared-edge-function-changelog.md#entry-legacy-20260923-0305`
 for why it couldn't be applied), Priority 2 (dead code, with one correction to this doc's own item
 10 — see that changelog entry), and Priority 4 items 15/16 are done as of
-that entry. Still open and requiring a direct answer from the user before
-anyone touches them: item 5 (self-signup removal), item 7 (dashboard
-toggle), item 13 (duplicate-page decision), item 14 (logo asset). Claude
-Code: re-read the changelog entry above before picking up any remaining
-item — don't re-do what's already shipped, and don't touch 5/7/13/14
-without the user's explicit answer landing in that same changelog first.
+that entry. Item 5 (self-signup removal) is now also done — the user
+confirmed removal on 2026-09-23; see commit `e071af9` on `main` (SignInForm's
+signup branch removed, plus the now-fully-orphaned signup plumbing across
+useAuthActions/AuthContext/AuthFormContext deleted rather than left dead).
+Still open and requiring a direct answer from the user before anyone
+touches them: item 7 (dashboard toggle), item 13 (duplicate-page decision),
+item 14 (logo asset). Claude Code: re-read the changelog entry above before
+picking up any remaining item — don't re-do what's already shipped, and
+don't touch 7/13/14 without the user's explicit answer landing in that same
+changelog first.
 
 Evidence backing every item here is in the Perplexity Computer session that
 produced this plan (Supabase `auth_logs`, `get_advisors`, and direct reads of
@@ -57,7 +61,7 @@ attributes.
 
 ## Priority 1 — Security gaps
 
-5. **Public self-signup on the login page.** `SignInForm.tsx`'s `mode ===
+5. **DONE (2026-09-23, commit `e071af9`).** **Public self-signup on the login page.** `SignInForm.tsx`'s `mode ===
    'signup'` branch calls `supabase.auth.signUp({ email, password })`
    directly — anyone hitting `inrange.jetreadvisors.com` can create a live
    account with no invite, bypassing `invite-agent`'s broker-approval check
@@ -192,9 +196,10 @@ attributes.
 
 - [ ] Priority 0 shipped and the user has confirmed a clean reset+login
       cycle works.
-- [ ] Priority 1 items 6, 8, 9 shipped; items 5 and 7 explicitly confirmed
-      with the user first (5 changes signup behavior, 7 is a dashboard
-      toggle Claude Code can't make directly).
+- [x] Priority 1 items 5, 6, 8 shipped (item 5 confirmed with the user first
+      and shipped 2026-09-23, commit `e071af9`); item 9 attempted, not
+      applicable (see changelog); item 7 still needs the user (it's a
+      dashboard toggle Claude Code can't make directly).
 - [ ] Priority 2 dead files removed, `git log` shows one clean commit per
       logical group (don't squash unrelated cleanup into the Priority 0 fix
       commit).
