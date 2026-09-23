@@ -2,7 +2,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import SignInForm from "@/components/auth/SignInForm";
@@ -60,16 +59,6 @@ const IndexPage = () => {
         </div>
 
         <SignInForm />
-
-        <div className="mt-6 text-center">
-          <Button 
-            variant="link" 
-            onClick={() => navigate('/auth')}
-            className="text-sm text-muted-foreground hover:text-primary"
-          >
-            Need to create an account?
-          </Button>
-        </div>
       </Card>
     </div>
   );

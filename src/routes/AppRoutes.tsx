@@ -6,7 +6,6 @@ import { Loader2 } from 'lucide-react';
 import { AppLayout } from '@/components/AppLayout';
 
 // Lazy load components
-const AuthPage = lazy(() => import(/* webpackChunkName: "auth" */ '@/components/auth/AuthPage'));
 const ResetPasswordPage = lazy(() => import(/* webpackChunkName: "reset-password" */ '@/pages/ResetPassword'));
 const DashboardPage = lazy(() => import(/* webpackChunkName: "dashboard" */ '@/pages/Dashboard'));
 const Settings = lazy(() => import(/* webpackChunkName: "settings" */ '@/pages/Settings'));
@@ -82,10 +81,9 @@ export const AppRoutes = () => {
           element={session ? <Navigate to="/dashboard" replace /> : <IndexPage />} 
         />
         
-        <Route
-          path="/auth"
-          element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />}
-        />
+        {/* AuthPage.tsx was a near-duplicate of IndexPage's own sign-in
+            card; removed in favor of a single login page at "/". */}
+        <Route path="/auth" element={<Navigate to="/" replace />} />
 
         {/* No session or PrivateRoute gate: Supabase's client establishes a
             recovery session from the emailed link's URL on load, which is
