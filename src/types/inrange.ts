@@ -86,6 +86,8 @@ export interface InRangeLead {
   notes: string | null;
   last_contacted_at: string | null;
   tags: string[] | null;
+  // Agent assignment (added via migration 2026-09-23)
+  assigned_agent_id: string | null;
 }
 
 export type InRangeLeadSummary = Pick<
@@ -94,4 +96,5 @@ export type InRangeLeadSummary = Pick<
   | 'priority_tier' | 'composite_score' | 'deal_type'
   | 'owner_name' | 'owner_type' | 'owner_state'
   | 'distress_indicators' | 'enrichment_status' | 'ai_enriched_at'
+  | 'assigned_agent_id'
 >;

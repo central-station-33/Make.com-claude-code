@@ -21,6 +21,7 @@ const InRangeLeadDetail = lazy(() => import(/* webpackChunkName: "inrange-detail
 const InRangeAddLead = lazy(() => import(/* webpackChunkName: "inrange-add" */ '@/pages/InRangeAddLead'));
 const InRangeImportCSV = lazy(() => import(/* webpackChunkName: "inrange-import" */ '@/pages/InRangeImportCSV'));
 const InRangeLists = lazy(() => import(/* webpackChunkName: "inrange-lists" */ '@/pages/InRangeLists'));
+const InRangeTeam = lazy(() => import(/* webpackChunkName: "inrange-team" */ '@/pages/InRangeTeam'));
 const RentalLeads = lazy(() => import(/* webpackChunkName: "rental-leads" */ '@/pages/RentalLeads'));
 const RentalLeadDetail = lazy(() => import(/* webpackChunkName: "rental-lead-detail" */ '@/pages/RentalLeadDetail'));
 const LandlordLeads = lazy(() => import(/* webpackChunkName: "landlord-leads" */ '@/pages/LandlordLeads'));
@@ -169,6 +170,14 @@ export const AppRoutes = () => {
           element={
             <PrivateRoute>
               <InRangeAddLead />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/team"
+          element={
+            <PrivateRoute>
+              <InRangeTeam />
             </PrivateRoute>
           }
         />

@@ -3,7 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
 import { InRangeLeadSummary, PriorityTier, LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_COLORS } from '@/types/inrange';
-import { Loader2, MapPin, AlertTriangle, Search, ChevronRight, User, ArrowLeft } from 'lucide-react';
+import { useCurrentTeamAgent } from '@/hooks/useCurrentTeamAgent';
+import AgentAssignSelect from '@/components/inrange/AgentAssignSelect';
+import { Loader2, MapPin, AlertTriangle, Search, ChevronRight, User, ArrowLeft, Sparkles } from 'lucide-react';
 
 type TierFilter = 'all' | PriorityTier;
 type StatusFilter = 'all' | LeadStatus;
@@ -70,13 +72,18 @@ function StatusBadge({
 
 type ExtendedLead = InRangeLeadSummary & { status?: LeadStatus | null; last_contacted_at?: string | null };
 
+type BulkEnrichResult = { success: boolean; enriched?: number; failed?: number; skipped_reason?: string; error?: string };
+
 const VALID_TIERS: TierFilter[] = ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'];
 const VALID_STATES: StateFilter[] = ['NY', 'NJ'];
 
 export default function InRangeLeads() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { isBroker } = useCurrentTeamAgent();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [bulkEnrichMsg, setBulkEnrichMsg] = useState<string | null>(null);
   // Dashboard tier/state tiles link here as /inrange/leads?tier=Tier%201 or
   // ?state=NY -- without reading them back out, those links always landed on
   // the unfiltered "all" view, silently dropping the context the click carried.
@@ -112,7 +119,7 @@ export default function InRangeLeads() {
     queryFn: async () => {
       let q = inrange
         .from('properties')
-        .select('id,address,city,state,zip,priority_tier,composite_score,deal_type,owner_name,owner_type,owner_state,distress_indicators,enrichment_status,ai_enriched_at,status,last_contacted_at,tags')
+        .select('id,address,city,state,zip,priority_tier,composite_score,deal_type,owner_name,owner_type,owner_state,distress_indicators,enrichment_status,ai_enriched_at,status,last_contacted_at,tags,assigned_agent_id')
         .order('composite_score', { ascending: false })
         .limit(200);
 
@@ -124,6 +131,52 @@ export default function InRangeLeads() {
       return (data ?? []) as ExtendedLead[];
     },
     staleTime: 2 * 60 * 1000,
+  });
+
+  const assignAgent = useMutation({
+    mutationFn: async ({ id, agentId }: { id: string; agentId: string | null }) => {
+      const { error } = await inrange
+        .from('properties')
+        .update({ assigned_agent_id: agentId } as any)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, agentId }) => {
+      const key = ['inrange-leads', tierFilter, stateFilter];
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<ExtendedLead[]>(key);
+      queryClient.setQueryData<ExtendedLead[]>(key, (old) =>
+        old?.map((l) => l.id === id ? { ...l, assigned_agent_id: agentId } : l) ?? []
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['inrange-leads', tierFilter, stateFilter], ctx.prev);
+    },
+  });
+
+  const bulkEnrich = useMutation({
+    mutationFn: async () => {
+      setBulkEnrichMsg(null);
+      const { data, error } = await inrange.functions.invoke('enrich-properties-batch', {
+        body: { limit: 10 },
+      });
+      if (error) throw error;
+      return data as BulkEnrichResult;
+    },
+    onSuccess: (data) => {
+      if (data.skipped_reason === 'budget_paused') {
+        setBulkEnrichMsg('AI budget for this month is paused — no properties enriched.');
+      } else if (data.skipped_reason === 'none_pending') {
+        setBulkEnrichMsg('No pending properties to enrich.');
+      } else {
+        setBulkEnrichMsg(`Enriched ${data.enriched ?? 0} propert${(data.enriched ?? 0) === 1 ? 'y' : 'ies'}${data.failed ? `, ${data.failed} failed` : ''}.`);
+      }
+      refetch();
+    },
+    onError: (err: any) => {
+      setBulkEnrichMsg(err?.message ?? 'Bulk enrichment failed.');
+    },
   });
 
   const updateStatus = useMutation({
@@ -152,11 +205,12 @@ export default function InRangeLeads() {
     const matchesTier = tierFilter === 'all' || l.priority_tier === tierFilter;
     const matchesState = stateFilter === 'all' || l.state === stateFilter;
     const matchesStatus = statusFilter === 'all' || (l.status ?? 'new_lead') === statusFilter;
+    const matchesUnassigned = !unassignedOnly || !l.assigned_agent_id;
     const matchesSearch = !search ||
       l.address.toLowerCase().includes(search.toLowerCase()) ||
       l.city.toLowerCase().includes(search.toLowerCase()) ||
       (l.owner_name ?? '').toLowerCase().includes(search.toLowerCase());
-    return matchesTier && matchesState && matchesStatus && matchesSearch;
+    return matchesTier && matchesState && matchesStatus && matchesUnassigned && matchesSearch;
   });
 
   const TIER_TABS: { label: string; value: TierFilter }[] = [
@@ -195,10 +249,38 @@ export default function InRangeLeads() {
                 <span className="ml-2 text-sm font-normal text-gray-400">({filtered.length} results)</span>
               </h1>
             </div>
-            <button onClick={() => refetch()} className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-              Refresh
-            </button>
+            <div className="flex items-center gap-3">
+              {isBroker && (
+                <button
+                  onClick={() => bulkEnrich.mutate()}
+                  disabled={bulkEnrich.isPending}
+                  className="flex items-center gap-1 text-xs font-medium bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-full px-3 py-1 disabled:opacity-50"
+                >
+                  {bulkEnrich.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  Enrich pending
+                </button>
+              )}
+              <button onClick={() => refetch()} className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                Refresh
+              </button>
+            </div>
           </div>
+
+          {bulkEnrichMsg && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{bulkEnrichMsg}</p>
+          )}
+
+          {isBroker && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-2">
+              <input
+                type="checkbox"
+                checked={unassignedOnly}
+                onChange={(e) => setUnassignedOnly(e.target.checked)}
+                className="rounded"
+              />
+              Unassigned only
+            </label>
+          )}
 
           {/* Search */}
           <div className="relative mb-3">
@@ -371,6 +453,16 @@ export default function InRangeLeads() {
                         <span className="text-[10px] text-gray-400">+{lead.distress_indicators.length - 2}</span>
                       )}
                     </div>
+                  )}
+
+                  {isBroker && (
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <AgentAssignSelect
+                        value={lead.assigned_agent_id}
+                        onChange={(agentId) => assignAgent.mutate({ id: lead.id, agentId })}
+                        className="text-[11px] font-medium rounded-full border px-2 py-0.5 cursor-pointer bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"
+                      />
+                    </span>
                   )}
 
                   {lastActivityDate && (

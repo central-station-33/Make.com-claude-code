@@ -3,7 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
 import { InRangeLead, PriorityTier, LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_COLORS } from '@/types/inrange';
-import { Loader2, ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Home, DollarSign, Share2, MessageCircle, TrendingUp, ShieldAlert, StickyNote } from 'lucide-react';
+import { useCurrentTeamAgent } from '@/hooks/useCurrentTeamAgent';
+import AgentAssignSelect from '@/components/inrange/AgentAssignSelect';
+import { Loader2, ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Home, DollarSign, Share2, MessageCircle, TrendingUp, ShieldAlert, StickyNote, Sparkles, UserCircle2 } from 'lucide-react';
 
 const TIER_COLORS: Record<PriorityTier, string> = {
   'Tier 1': 'bg-red-100 text-red-700 border-red-300',
@@ -42,9 +44,11 @@ export default function InRangeLeadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { teamAgent, isBroker } = useCurrentTeamAgent();
   const [tab, setTab] = useState<Tab>('outreach');
   const [notes, setNotes] = useState('');
   const [notesSaved, setNotesSaved] = useState(false);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
 
   const saveNotes = useMutation({
     mutationFn: async (text: string) => {
@@ -71,6 +75,38 @@ export default function InRangeLeadDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inrange-lead', id] });
       queryClient.invalidateQueries({ queryKey: ['inrange-leads'] });
+    },
+  });
+
+  const assignAgent = useMutation({
+    mutationFn: async (agentId: string | null) => {
+      const { error } = await inrange
+        .from('properties')
+        .update({ assigned_agent_id: agentId } as any)
+        .eq('id', id!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inrange-lead', id] });
+      queryClient.invalidateQueries({ queryKey: ['inrange-leads'] });
+    },
+  });
+
+  const enrichNow = useMutation({
+    mutationFn: async () => {
+      setEnrichError(null);
+      const { data, error } = await inrange.functions.invoke('enrich-property', {
+        body: { property_id: id },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inrange-lead', id] });
+      queryClient.invalidateQueries({ queryKey: ['inrange-leads'] });
+    },
+    onError: (err: any) => {
+      setEnrichError(err?.message ?? 'Enrichment failed');
     },
   });
 
@@ -154,7 +190,40 @@ export default function InRangeLeadDetail() {
               <Mail className="h-3 w-3" /> Email
             </a>
           )}
+
+          {isBroker ? (
+            <AgentAssignSelect
+              value={lead.assigned_agent_id}
+              onChange={(agentId) => assignAgent.mutate(agentId)}
+              disabled={assignAgent.isPending}
+            />
+          ) : (
+            <span className="flex items-center gap-1.5 text-xs font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-full px-3 py-1">
+              <UserCircle2 className="h-3 w-3" /> Assigned to you
+            </span>
+          )}
+
+          {(isBroker || teamAgent?.id === lead.assigned_agent_id) && (
+            <button
+              onClick={() => enrichNow.mutate()}
+              disabled={enrichNow.isPending || lead.enrichment_status === 'processing'}
+              className="flex items-center gap-1.5 text-xs font-medium bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-full px-3 py-1 disabled:opacity-50"
+            >
+              {enrichNow.isPending || lead.enrichment_status === 'processing' ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              {lead.enrichment_status === 'complete' ? 'Re-enrich' : 'Enrich now'}
+            </button>
+          )}
         </div>
+
+        {enrichError && (
+          <div className="px-4 pb-2">
+            <p className="text-xs text-red-600 dark:text-red-400">{enrichError}</p>
+          </div>
+        )}
 
         {/* Score bar */}
         <div className="px-4 pb-3 flex items-center gap-3">

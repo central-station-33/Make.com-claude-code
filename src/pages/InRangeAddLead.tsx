@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
 import { PriorityTier } from '@/types/inrange';
+import { useCurrentTeamAgent } from '@/hooks/useCurrentTeamAgent';
 import { ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 
 type FormData = {
@@ -38,6 +39,7 @@ const LABEL_CLASS = 'block text-xs font-medium text-gray-600 dark:text-gray-400 
 
 export default function InRangeAddLead() {
   const navigate = useNavigate();
+  const { teamAgent, isBroker, isLoading: agentLoading } = useCurrentTeamAgent();
   const [form, setForm] = useState<FormData>(EMPTY);
   const [saved, setSaved] = useState(false);
 
@@ -62,6 +64,11 @@ export default function InRangeAddLead() {
           composite_score: 50,
           enrichment_status: 'pending',
           status: 'new_lead',
+          // Non-broker agents can only see their own leads under RLS, so a
+          // manually-added lead must self-assign to stay visible to its
+          // creator. Brokers leave it unassigned (null) so it shows up as
+          // an open lead they can hand out.
+          assigned_agent_id: isBroker ? null : teamAgent?.id ?? null,
         } as any)
         .select('id')
         .single();
@@ -74,7 +81,7 @@ export default function InRangeAddLead() {
     },
   });
 
-  const canSubmit = form.address.trim() && form.city.trim() && form.state.trim();
+  const canSubmit = form.address.trim() && form.city.trim() && form.state.trim() && !agentLoading;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">

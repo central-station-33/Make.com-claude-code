@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { inrange } from '@/integrations/supabase/inrange';
-import { Loader2, MapPin, ChevronRight, AlertTriangle, TrendingUp, Building2, Clock } from 'lucide-react';
+import { useCurrentTeamAgent } from '@/hooks/useCurrentTeamAgent';
+import { Loader2, MapPin, ChevronRight, AlertTriangle, TrendingUp, Building2, Clock, Sparkles } from 'lucide-react';
 
 type TierCount = { tier: string; count: number };
 type StateCount = { state: string; count: number };
@@ -23,8 +25,12 @@ const STATE_STYLES: Record<string, { bg: string; text: string; dot: string }> = 
   NJ: { bg: 'bg-teal-50 dark:bg-teal-950', text: 'text-teal-700 dark:text-teal-300', dot: 'bg-teal-500' },
 };
 
+type BulkEnrichResult = { success: boolean; enriched?: number; failed?: number; skipped_reason?: string; error?: string };
+
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { isBroker } = useCurrentTeamAgent();
+  const [enrichMsg, setEnrichMsg] = useState<string | null>(null);
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -83,13 +89,43 @@ export default function DashboardPage() {
 
   const isLoading = statsLoading || leadsLoading;
 
+  const bulkEnrich = useMutation({
+    mutationFn: async () => {
+      setEnrichMsg(null);
+      const { data, error } = await inrange.functions.invoke('enrich-properties-batch', { body: { limit: 10 } });
+      if (error) throw error;
+      return data as BulkEnrichResult;
+    },
+    onSuccess: (data) => {
+      if (data.skipped_reason === 'budget_paused') setEnrichMsg('AI budget for this month is paused — no properties enriched.');
+      else if (data.skipped_reason === 'none_pending') setEnrichMsg('No pending properties to enrich.');
+      else setEnrichMsg(`Enriched ${data.enriched ?? 0} propert${(data.enriched ?? 0) === 1 ? 'y' : 'ies'}${data.failed ? `, ${data.failed} failed` : ''}.`);
+    },
+    onError: (err: any) => setEnrichMsg(err?.message ?? 'Bulk enrichment failed.'),
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
-        <h1 className="text-lg font-bold text-gray-900 dark:text-white">InRange Pipeline</h1>
-        <p className="text-xs text-gray-500 dark:text-gray-400">Property distress dashboard</p>
+      <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white">InRange Pipeline</h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Property distress dashboard</p>
+        </div>
+        {isBroker && (
+          <button
+            onClick={() => bulkEnrich.mutate()}
+            disabled={bulkEnrich.isPending}
+            className="flex items-center gap-1 text-xs font-medium bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-full px-3 py-1.5 disabled:opacity-50"
+          >
+            {bulkEnrich.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            Enrich pending
+          </button>
+        )}
       </div>
+      {enrichMsg && (
+        <p className="text-xs text-gray-500 dark:text-gray-400 px-4 pt-2">{enrichMsg}</p>
+      )}
 
       <div className="px-4 py-4 space-y-4">
         {isLoading && (

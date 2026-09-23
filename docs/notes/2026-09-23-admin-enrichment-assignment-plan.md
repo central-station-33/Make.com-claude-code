@@ -1,6 +1,10 @@
 # Admin control, property enrichment, and lead assignment — fix plan
 
-**STATUS: PLAN ONLY — NOT APPROVED FOR EXECUTION**
+**STATUS: APPROVED AND EXECUTED — see "6. Execution summary" at the bottom
+for exactly what was built, corrected, and verified. Decisions 1–3 in
+section 2 were approved by the user in chat on 2026-09-23; Decision 4 was
+resolved by user correction, not by this agent's original diagnosis (see
+correction note on the `/dashboard` row below).**
 
 Requested by: Jet Taffet (Jet Realty Advisors), 2026-09-23
 Goal: give `team@joinjra.com` full admin control of InRange, add a dashboard
@@ -16,13 +20,13 @@ those same rows with proper access controls, and support agent onboarding.
 | Supabase RLS | `properties` (the 924 rows) | One policy: `auth all properties`, `ALL`, `roles={authenticated}`, `qual=true` — **any signed-in user, agent or broker, already has full read/write/delete on all 924 rows.** There is no per-role restriction today. | `pg_policies` | High |
 | Supabase RLS | `raw_properties` (853 rows, pre-normalization ingest log) | SELECT only, open to any authenticated user. No write policy exists via RLS (writes happen through the service role in ingest functions). | `pg_policies` | High |
 | Frontend | `userRole === 'owner'` checks (`DashboardContainer.tsx`) | Dead code. `team_agents.role` is only ever set to `'agent'` or `'broker'` (enforced in `invite-agent`); `'owner'` is never assignable through any current pathway, so the "Owner Dashboard" / `AgentPerformanceSection` branch never renders for anyone. | `useAuthState.ts`, `invite-agent/index.ts` | High |
-| Frontend | `/dashboard` route (`Dashboard.tsx` → `useLeadsQuery`) | **Broken.** Queries `leads`, `profiles`, `crm_contacts`, `lead_imports` — none of these tables exist in the live schema (confirmed against full 28-table list). This is the page a session lands on by default (`/` → `/dashboard` once logged in), so most of the "Dashboard" UI (`LeadAssignments`, `UnassignedLeadsTable`, `AssignLeadDialog`, agent-invite header) is effectively unreachable / non-functional in production. | `useLeadsQuery.ts`, `useAssignLead.ts`, live table list | High |
+| Frontend | `/dashboard` route (`Dashboard.tsx`) | **CORRECTION (2026-09-23, after user pushback):** this diagnosis row was wrong. `AppRoutes.tsx` lazy-loads `src/pages/Dashboard.tsx` for `/dashboard`, and that file is fully functional — it queries `properties` directly via the `inrange` client and renders the "InRange Pipeline / Property distress dashboard" the user confirmed live via screenshot (924 Total, 0 Enriched, 49 Pending, NY=444/NJ=471, Tier1=49/Tier2=69/Tier3=216/Tier4=590). The broken-looking components originally flagged (`src/components/dashboard/Dashboard.tsx`, `DashboardContainer.tsx`, `useLeadsQuery.ts`, `LeadAssignments.tsx`, `UnassignedLeadsTable.tsx`, `useAssignLead.ts`, `AssignLeadDialog.tsx`, `DashboardHeader.tsx`) are a **separate, genuinely dead/orphaned component tree** not reachable from any route — the mixup was reading that tree instead of the live `pages/Dashboard.tsx`. The practical conclusion still held: `DashboardHeader.tsx` (dead) was the only place `InviteAgentDialog` rendered, so agent invite had no reachable UI — fixed in Phase D below via a real `/team` route, not by touching `/dashboard`. | `AppRoutes.tsx`, `pages/Dashboard.tsx`, user screenshot confirmation | High |
 | Frontend | `/inrange/leads` (`InRangeLeads.tsx`) | **This is the working page** — queries `properties` directly via the `inrange` Supabase client, matches the live schema, and is almost certainly what "InRange.jetreadvisors.com is working" refers to. It has status editing and filtering but **no agent-assignment field or enrichment trigger of any kind.** | `InRangeLeads.tsx` | High |
 | Database | `properties.enrichment_status` (the 924 "raw" rows) | 875 `skipped`, 49 `pending`, 0 `complete`. No `assigned_agent_id` column exists on `properties` at all (only `deals.assigned_agent_id`, which only applies once a deal exists). | `execute_sql` count query, `list_tables` | High |
 | Backend | `enrich-property` (per-property Claude enrichment) | `verify_jwt: true` — already safely callable from the browser with the signed-in user's session token. No batch mode; one property at a time. | `list_edge_functions` | High |
 | Backend | `enrich-pending`, `process-raw-properties`, `rescore-properties` | `verify_jwt: false` at the gateway. `rescore-properties` enforces its own `x-make-secret` check in code; `enrich-pending` and `process-raw-properties` have **no auth check in code either** — currently callable by anyone who has the URL, not just Make. Not directly relevant to this request, but a real gap worth a follow-up (out of scope here unless you want it folded in). | function source + `list_edge_functions` | High |
 | Backend | `assign-leads`, `claim-lead` | Fully working agent-assignment mechanism — but it operates on **`isa_leads`** (186 rows, the BANT-scored ISA pipeline), not on `properties`. Gated by `x-make-secret`, Make-only, no dashboard UI. This is not the same table as the 924 rows in question. | function source | High |
-| Backend | `invite-agent` | `verify_jwt: true`, already checks caller is `role='broker'` via `team_agents` before creating the new `auth.users` row + `team_agents` row and sending Supabase's invite email. Frontend dialog (`InviteAgentDialog.tsx`) already exists and is wired into `DashboardHeader.tsx` — but that header only renders inside the broken `/dashboard` route above. | `invite-agent/index.ts`, `DashboardHeader.tsx` | High |
+| Backend | `invite-agent` | `verify_jwt: true`, already checks caller is `role='broker'` via `team_agents` before creating the new `auth.users` row + `team_agents` row and sending Supabase's invite email. **CORRECTION:** the frontend dialog (`InviteAgentDialog.tsx`) was a stub — it had a `// TODO: Implement agent invitation logic` and only showed a fake success toast, never calling `invite-agent` at all. It was also only rendered inside the dead `DashboardHeader.tsx`, so it was doubly unreachable and non-functional. Fixed in Phase D below. | `invite-agent/index.ts`, `InviteAgentDialog.tsx` (before fix) | High |
 
 ### Net effect of the diagnosis
 `team@joinjra.com` already has **broker-level admin rights** at the database
@@ -124,3 +128,35 @@ open RLS policy). What's actually missing is not permission — it's that:
 - No change to the currently-open `properties` RLS policy will be made
   without explicit approval, since narrowing it affects every agent's access
   immediately in production.
+
+## 6. Execution summary (2026-09-23, after approval)
+
+All four decisions in section 2 were resolved: brokerage/name → fixed to
+`Jet Realty Advisors` / `jet_realty`; agent access → restricted to own
+assigned leads; enrichment trigger → both per-lead and bulk buttons;
+`/dashboard` → confirmed working by the user, left untouched (see corrected
+diagnosis rows above).
+
+**Database (Supabase project `omzugrtgwsjypekuzgtn`):**
+- Migration `properties_agent_assignment_and_rls`: added `properties.assigned_agent_id uuid references team_agents(id)` + index; replaced the single open `"auth all properties"` policy with `"brokers full access properties"` (is_broker()) and three agent-scoped policies (select/update/insert own `assigned_agent_id`).
+- Migration `dedupe_agent_id_helper_use_existing`: discovered `current_team_agent_id()` already existed (identical to a helper I'd just added) and already backs the same pattern on `isa_leads`/`deals`/`lead_touches` — repointed the new `properties` policies at it and dropped the duplicate, so `properties` now follows the exact same access convention as the rest of the schema.
+- `UPDATE team_agents SET full_name='Jet Realty Advisors', brokerage='jet_realty' WHERE email='team@joinjra.com'` — confirmed applied.
+- `get_advisors` (security) re-run after both migrations: no new findings introduced beyond pre-existing informational ones (`ai_budget_tracker`/backup-table RLS-no-policy, `pg_net` extension location) — not part of this change.
+
+**New edge function:** `enrich-properties-batch` (verify_jwt: true, v2 deployed with real code after an initial placeholder-content mistake was caught and corrected). Checks caller is `role='broker'` via `team_agents`, gates on the shared `ai_budget_tracker` via `increment_ai_budget_spend` (same RPC `enrich-leads` uses), enriches up to `limit` (default 10, max 25) pending/skipped properties with Claude Haiku 4.5, and records real per-call cost using Anthropic's published Haiku 4.5 rates ($1/$5 per MTok in/out, checked 2026-09-23 via [Claude's pricing page](https://platform.claude.com/docs/en/about-claude/pricing)). Deliberately does not call `enrich-property` internally (that function has no auth check and is also used by other automation) — duplicates its short prompt instead, so a batch-enriched row's `ai_analysis` shape matches a manually-enriched one.
+
+**Frontend (`central-station-33/inrange-frontend`):**
+- `InRangeAddLead.tsx` — manual "Add a Lead" insert now sets `assigned_agent_id` (self-assign for non-brokers, `null`/open for brokers), required so the new RLS `WITH CHECK` doesn't break manual lead creation.
+- `src/hooks/useCurrentTeamAgent.ts` (new) — the signed-in user's own `team_agents.id`/role, used across the new UI.
+- `src/components/inrange/AgentAssignSelect.tsx` (new) — shared agent-assignment dropdown.
+- `InRangeLeadDetail.tsx` — broker-only assignment control, "Enrich now"/"Re-enrich" button (visible to brokers and the lead's assigned agent) calling `enrich-property`.
+- `InRangeLeads.tsx` — `assigned_agent_id` column added to the query; broker-only per-row assign dropdown, "Unassigned only" filter toggle, and "Enrich pending" bulk button calling `enrich-properties-batch`.
+- `Dashboard.tsx` (the live `/dashboard` route) — added the same broker-only "Enrich pending" bulk-enrich button to the header, since that's the page the user actually uses day to day.
+- `InviteAgentDialog.tsx` — was a non-functional stub (TODO, fake success toast); rewired to actually call `invite-agent` with the full required payload (email, full_name, market, brokerage, role, optional phone/license).
+- `InRangeTeam.tsx` (new page, `/team`) — broker-gated team roster (name, email, role, market, brokerage, YTD volume) with an active/probation/inactive status toggle, plus the fixed invite dialog. Added to `SidebarNav.tsx` under a new "Admin" section, visible only to brokers.
+
+**Verification:**
+- `npx tsc --noEmit -p tsconfig.json` — clean.
+- `npm run build` — succeeds (no new errors; pre-existing chunk-size warning only).
+- Database state re-queried after migration: `team_agents` row for `team@joinjra.com` confirmed `full_name='Jet Realty Advisors', brokerage='jet_realty', role='broker', status='active'`; `properties` policies confirmed matching the `isa_leads`/`deals` convention exactly.
+- Not yet verified: an actual authenticated end-to-end pass (invite an agent, assign a lead, run both enrichment paths, confirm an agent only sees their own leads) — no browser session as `team@joinjra.com` is available to this agent; needs the user's own check or a follow-up session with local-browser access.

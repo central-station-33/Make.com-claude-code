@@ -1,6 +1,7 @@
 
-import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, MapPin, Building2, Megaphone, User } from "lucide-react";
+import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, MapPin, Building2, Megaphone, User, Users } from "lucide-react";
 import SidebarNavItem from "./SidebarNavItem";
+import { useCurrentTeamAgent } from "@/hooks/useCurrentTeamAgent";
 
 const mainNavItems = [
   {
@@ -74,6 +75,17 @@ const accountItems = [
   }
 ];
 
+// Broker/admin-only: invite agents and manage roster. Hidden for agents,
+// who have no use for it -- RLS also blocks them from the underlying data.
+const teamItems = [
+  {
+    id: "team",
+    path: "/team",
+    icon: Users,
+    label: "Team"
+  }
+];
+
 type NavItem = { id: string; path: string; icon: typeof Home; label: string; matchNested?: boolean };
 
 const NavSection = ({ title, items }: { title?: string; items: NavItem[] }) => (
@@ -96,12 +108,15 @@ const NavSection = ({ title, items }: { title?: string; items: NavItem[] }) => (
 );
 
 const SidebarNav = () => {
+  const { isBroker } = useCurrentTeamAgent();
+
   return (
     <nav className="space-y-6 px-2">
       <NavSection items={mainNavItems} />
       <NavSection title="Lead Management" items={leadManagementItems} />
       <NavSection title="Rental Leasing" items={leasingItems} />
       <NavSection title="Communication" items={communicationItems} />
+      {isBroker && <NavSection title="Admin" items={teamItems} />}
       <NavSection title="Account" items={accountItems} />
     </nav>
   );
