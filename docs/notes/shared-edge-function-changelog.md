@@ -26,6 +26,62 @@ them.
 Append newest entries at the top, immediately below this section, above the
 "Legacy entries" divider.
 
+<a id="entry-20260923-09"></a>
+## [2026-09-23 23:39 UTC] edge-function:send-sms — rebuilt from scratch against isa_leads + lead_touches — perplexity-computer
+agent: perplexity-computer
+entry-id: 20260923-09
+target-type: edge-function
+target-id: send-sms
+window-check: yes
+verify_jwt-before: n/a (function did not exist -- never deployed)
+verify_jwt-after: true
+artifact: supabase-version:1
+commit: afed58a
+status: done
+related-entries: entry-20260923-08
+
+Old `send-sms` (never deployed, dead code) targeted a `text_messages` table
+that doesn't exist in this schema. Rebuilt against tables that already
+exist and fit: `isa_leads` (phone, sms_consent, sms_opt_out,
+assigned_agent_id) and `lead_touches` (channel enum already includes
+'sms', RLS already scopes it to the lead's assigned agent or a broker).
+No migration needed.
+
+New function: reads phone from isa_leads server-side (never trusts a
+client-supplied number), gates access to the assigned agent or a broker,
+refuses to send if sms_opt_out is true or sms_consent is not true,
+normalizes phone to E.164 for Twilio, and writes one lead_touches row
+(channel='sms') per attempt whether the Twilio call succeeds or fails.
+CORS/response helpers inlined directly in index.ts rather than imported
+from `_shared/cors.ts` -- the deploy tool used for this deploy couldn't
+resolve that relative import ("Module not found"), even though the same
+import resolves fine for `invite-agent`; inlining sidesteps it.
+
+Deployed as version 1 (function did not exist before -- every production
+call to the old caller code was a 404). Verified live via curl: OPTIONS
+preflight returns 200 with full CORS headers; POST without auth returns 401
+(`UNAUTHORIZED_NO_AUTH_HEADER`) before reaching function code, consistent
+with `verify_jwt: true`.
+
+Frontend also rebuilt in the same commit: `useSMSMessaging`,
+`SMSInput`/`SMSList`/`SMSMessaging` now read/write `lead_touches` instead
+of the old table, and no longer collect a phone number in the UI (it's
+looked up server-side from isa_leads, closing a consent-bypass path the
+old design had). The `SMSMessaging` component still has no page that
+renders it -- that's a separate, not-yet-approved scope decision, not part
+of this entry.
+
+**Not yet functional end-to-end, by design, pending two decisions the user
+still needs to make (see the plan/report delivered alongside this entry):**
+1. `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` are
+   not set as Supabase secrets on this project -- no MCP tool exists to set
+   them, so this needs the user to add them directly (Supabase Dashboard
+   or CLI), not this agent.
+2. `sms_consent` is NULL on all 186 existing isa_leads rows -- the send
+   path will refuse every one of them until either a consent-capture step
+   populates that column, or the user explicitly decides to relax the gate
+   (not recommended -- TCPA risk).
+
 ```
 <a id="entry-YYYYMMDD-NN"></a>
 ## [timestamp] target-type:target-id — one-line summary
