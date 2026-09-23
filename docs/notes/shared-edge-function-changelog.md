@@ -8,16 +8,90 @@ in real time — there is no shared session, only this repo.
 
 **Rule: before deploying any change to a shared edge function or Make
 scenario, check this file for an entry from the other agent touching the same
-function within roughly the last day. After deploying, add an entry here in
-the same commit (or the next one) — don't rely on memory or the git log alone,
-since a fast-follow deploy can otherwise silently overwrite unrelated work
-(see the `ingest-leads` incident below, the reason this file exists).**
+target within roughly the last day. After deploying, add an entry here in
+the same commit (or the next one, citing the first commit's real SHA) —
+don't rely on memory or the git log alone, since a fast-follow deploy can
+otherwise silently overwrite unrelated work (see the `ingest-leads` incident
+in the legacy entries below, the reason this file exists).**
 
-Append newest entries at the top. Keep each entry short: what function, what
-changed, why, and what `verify_jwt` ended up as if that's part of the change.
+This is a good-faith protocol between two cooperating agents, not an
+enforcement mechanism: neither agent can be blocked from deploying directly
+to Supabase/Make outside of git, and every field below except `commit` and
+migration filenames is self-attested. The structure exists to make
+inaccurate or skipped entries cheap to spot after the fact, not to prevent
+them.
+
+## Entry format (entries dated 2026-09-23T16:00Z or later)
+
+Append newest entries at the top, immediately below this section, above the
+"Legacy entries" divider.
+
+```
+<a id="entry-YYYYMMDD-NN"></a>
+## [timestamp] target-type:target-id — one-line summary
+agent: claude-code | perplexity-computer | unknown
+entry-id: YYYYMMDD-NN
+target-type: edge-function | make-scenario | migration | code-only | other
+target-id: <canonical id>
+window-check: yes | no
+verify_jwt-before: <true|false|n/a>
+verify_jwt-after: <true|false|n/a>
+artifact: <checkable proof, see table below>
+commit: <sha>
+status: done | in-progress | abandoned
+related-entries: <anchor ids, if any>
+
+Free-text body as before: what changed, why, what was verified, follow-ups.
+```
+
+Field notes:
+
+- **`agent`** — never guess. If it's genuinely unclear which agent made a
+  change, use `unknown` rather than a hedge like "likely Claude Code" — an
+  explicit `unknown` can be grepped for and flagged later; a guess reads as
+  settled and can't be.
+- **`target-id`** must be the canonical identifier, not a display name:
+  edge function → its deploy/directory name; Make scenario → its numeric
+  scenario ID, not its title (titles get renamed — see the 2026-09-21
+  Vercel-project-rename entry below for how confusing that can get);
+  migration → the migration filename.
+- **`window-check`** is a self-attested yes/no on whether you actually
+  checked this file for `target-id` in roughly the last 24h before
+  deploying. It doesn't enforce the check — it makes a skipped check
+  visible instead of silent.
+- **`artifact`** is a checkable proof, per target type:
+
+  | target-type | artifact | how it's verified |
+  |---|---|---|
+  | edge-function | `supabase-version:<N>` | `list_edge_functions`/`get_edge_function` against live state |
+  | migration | the migration filename | exists in `supabase/migrations/` by construction |
+  | make-scenario | scenario ID + modules touched | `scenarios_get` against the live blueprint (weakest leg — Make has no clean version primitive) |
+  | code-only | commit SHA | `git show <sha>` |
+
+  For anything with a code commit, prefer committing the actual change
+  first and the changelog entry second, citing the first commit's real SHA
+  — avoids citing a commit that doesn't exist yet.
+- **`status: in-progress`** is for a multi-step effort spanning a plan doc
+  and several deploys (one entry per *effort*, updated as work lands) — not
+  a per-deploy pre-announcement ritual. There's no live channel between
+  agents, so a per-deploy "claiming X" entry would only help if the other
+  agent happens to read it in the exact gap between deploy and changelog
+  commit — not meaningfully more likely than it reading the after-the-fact
+  entry already required above. Not worth the overhead on every deploy.
 
 ---
 
+## Legacy entries
+
+Everything below predates the structured format above
+(pre-2026-09-23T16:00Z, prose-only). Treat these claims as unverified
+unless independently checked — e.g. the 2026-09-23 03:05 UTC entry's
+item-12 claim (`send-auth-email` deletion) turned out to be only
+half-shipped on inspection, despite being logged as done.
+
+---
+
+<a id="entry-legacy-20260923-0305"></a>
 ## 2026-09-23 03:05 UTC — Auth/dashboard fix plan: DB + code changes shipped — Perplexity (assistant)
 User approved execution of `docs/notes/2026-09-22-auth-dashboard-fix-plan.md`.
 Shipped so far (not an edge function per se, but logging DB migrations here
@@ -114,6 +188,7 @@ historical URLs still resolve. See
 about to reference "the make-com-claude-code Vercel project" — it's this
 same project, just renamed.
 
+<a id="entry-legacy-20260921-2131"></a>
 ## 2026-09-21 21:31 UTC — `ingest-leads` — fixed comma-in-name duplicate-match bug — agent unconfirmed (likely Claude Code)
 Rewrote the duplicate-lookup query: PostgREST's `.or()` reads a bare comma as
 a clause separator, and ACRIS-sourced names routinely contain one (e.g.

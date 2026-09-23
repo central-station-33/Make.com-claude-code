@@ -4,9 +4,9 @@
 after a full audit of the live login flow, the `inrange-frontend` repo, and
 the Supabase project (`omzugrtgwsjypekuzgtn`). The user has approved
 executing this plan. Priority 0 (root cause), Priority 1 items 6/8 (and 9
-attempted — see the 2026-09-23 03:05 UTC entry in
-`docs/notes/shared-edge-function-changelog.md` for why it couldn't be
-applied), Priority 2 (dead code, with one correction to this doc's own item
+attempted — see the entry at
+`docs/notes/shared-edge-function-changelog.md#entry-legacy-20260923-0305`
+for why it couldn't be applied), Priority 2 (dead code, with one correction to this doc's own item
 10 — see that changelog entry), and Priority 4 items 15/16 are done as of
 that entry. Still open and requiring a direct answer from the user before
 anyone touches them: item 5 (self-signup removal), item 7 (dashboard
