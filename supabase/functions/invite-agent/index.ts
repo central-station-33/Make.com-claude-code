@@ -16,6 +16,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -25,6 +26,7 @@ function serviceClient() {
 }
 
 serve(async (req) => {
+  if (req.method === 'OPTIONS') return handleOptions();
   if (req.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
 
   const authHeader = req.headers.get('Authorization') ?? '';
@@ -106,5 +108,8 @@ serve(async (req) => {
 });
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+  });
 }
