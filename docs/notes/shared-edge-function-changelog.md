@@ -81,13 +81,39 @@ Field notes:
 
 ---
 
+<a id="entry-20260923-01"></a>
+## [2026-09-23T15:40Z] code-only:send-auth-email — deleted dead edge function, completing item 12
+agent: claude-code
+entry-id: 20260923-01
+target-type: code-only
+target-id: supabase/functions/send-auth-email
+window-check: yes
+verify_jwt-before: n/a
+verify_jwt-after: n/a
+artifact: commit:8cab3a7
+commit: 8cab3a7
+status: done
+related-entries: entry-legacy-20260923-0305
+
+`docs/notes/2026-09-22-auth-dashboard-fix-plan.md` item 12 called
+`supabase/functions/send-auth-email/` dead code (absent from
+`list_edge_functions`, i.e. never deployed) and asked for it to be deleted
+alongside `src/utils/emailUtils.ts`. The legacy entry linked above logged
+both as done, but only `emailUtils.ts` had actually been removed — this
+repo's review (PR #24) caught the miss. Re-confirmed before deleting: no
+references to `send-auth-email` or `sendAuthEmail` remain anywhere in
+`src/` or `supabase/functions/` (grep clean). Item 12 is now fully closed.
+
+---
+
 ## Legacy entries
 
 Everything below predates the structured format above
 (pre-2026-09-23T16:00Z, prose-only). Treat these claims as unverified
 unless independently checked — e.g. the 2026-09-23 03:05 UTC entry's
 item-12 claim (`send-auth-email` deletion) turned out to be only
-half-shipped on inspection, despite being logged as done.
+half-shipped on inspection, despite being logged as done (closed by
+[entry-20260923-01](#entry-20260923-01) above).
 
 ---
 
