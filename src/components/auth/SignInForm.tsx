@@ -22,11 +22,8 @@ const SignInForm = memo(() => {
     timeRemaining
   } = useAuthForm();
 
-  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
+  const [mode, setMode] = useState<'signin' | 'forgot'>('signin');
   const [password, setPassword] = useState('');
-  const [signupDone, setSignupDone] = useState(false);
-  const [signupError, setSignupError] = useState('');
-  const [signingUp, setSigningUp] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const [resetError, setResetError] = useState('');
@@ -52,19 +49,6 @@ const SignInForm = memo(() => {
       setResetSent(true);
     }
     setResetting(false);
-  };
-
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSigningUp(true);
-    setSignupError('');
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      setSignupError(error.message);
-    } else {
-      setSignupDone(true);
-    }
-    setSigningUp(false);
   };
 
   if (mode === 'forgot') {
@@ -104,50 +88,6 @@ const SignInForm = memo(() => {
     );
   }
 
-  if (mode === 'signup') {
-    return (
-      <form onSubmit={handleSignUp} className="space-y-4">
-        {signupDone ? (
-          <Alert>
-            <AlertDescription>
-              Account created! Check your email to confirm, or go back and sign in directly if email confirmation is off.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <>
-            {signupError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{signupError}</AlertDescription>
-              </Alert>
-            )}
-            <EmailField value={email} onChange={setEmail} isLoading={signingUp} />
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={signingUp}
-                placeholder="Create a password"
-                autoComplete="new-password"
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={signingUp || !email || !password}>
-              {signingUp ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating account...</> : 'Create Account'}
-            </Button>
-          </>
-        )}
-        <div className="text-center">
-          <Button type="button" variant="link" onClick={() => setMode('signin')} className="text-gray-600 hover:text-gray-900">
-            Already have an account? Sign in
-          </Button>
-        </div>
-      </form>
-    );
-  }
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
@@ -181,10 +121,7 @@ const SignInForm = memo(() => {
         <Button type="submit" className="w-full" disabled={isLoading || isRateLimited || !email || !password}>
           {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...</> : 'Sign In'}
         </Button>
-        <div className="flex items-center justify-between gap-4">
-          <Button type="button" variant="link" onClick={() => setMode('signup')} className="text-gray-600 hover:text-gray-900 px-0">
-            No account? Create one
-          </Button>
+        <div className="flex items-center justify-end">
           <Button type="button" variant="link" onClick={() => { setMode('forgot'); setResetEmail(email); }} className="text-gray-600 hover:text-gray-900 px-0">
             Forgot password?
           </Button>

@@ -20,7 +20,6 @@ export function AuthFormProvider({ children }: { children: ReactNode }) {
     error: authState.error,
     success: authState.success,
     handleSignIn: authFormProvider.handleSignIn,
-    handleSignUp: authFormProvider.handleSignUp,
     handleForgotPassword: authFormProvider.handleForgotPassword,
     handleResetPassword: authFormProvider.handleResetPassword,
     remainingAttempts: authState.remainingAttempts,

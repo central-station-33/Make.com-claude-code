@@ -22,7 +22,6 @@ export interface AuthContextType {
   user: User | null;
   userRole: string | null;
   signIn: (email: string, password?: string) => Promise<{ data: any; error: null; } | { data: null; error: any; }>;
-  signUp: (email: string) => Promise<{ data: any; error: null; } | { data: null; error: any; }>;
   signOut: () => Promise<void>;
   loading: boolean;
   error: Error | null;
@@ -38,7 +37,6 @@ export interface AuthFormContextType {
   error: AuthError | null;
   success: boolean;
   handleSignIn: (email: string, password?: string) => Promise<SignInResult>;
-  handleSignUp: (email: string) => Promise<void>;
   handleForgotPassword: (email: string) => Promise<void>;
   handleResetPassword: (token: string, password: string) => Promise<void>;
   remainingAttempts: number;

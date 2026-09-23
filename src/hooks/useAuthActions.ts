@@ -40,38 +40,6 @@ export const useAuthActions = () => {
     }
   };
 
-  const signUp = async (email: string) => {
-    try {
-      const siteURL = window.location.origin;
-      const { data, error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${siteURL}/auth/callback`,
-          data: {
-            redirect_url: `${siteURL}/dashboard`,
-          }
-        }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Account created",
-        description: "Please check your email to verify your account.",
-      });
-
-      return { data, error: null };
-    } catch (error: any) {
-      console.error("Sign up error:", error);
-      toast({
-        variant: "destructive",
-        title: "Sign up failed",
-        description: error.message,
-      });
-      return { data: null, error };
-    }
-  };
-
   const signOut = async () => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -93,5 +61,5 @@ export const useAuthActions = () => {
     }
   };
 
-  return { signIn, signUp, signOut };
+  return { signIn, signOut };
 };

@@ -11,7 +11,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const { session, user, userRole } = useAuthState();
-  const { signIn, signUp, signOut } = useAuthActions();
+  const { signIn, signOut } = useAuthActions();
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -55,7 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     userRole,
     signIn,
-    signUp,
     signOut,
     loading,
     error: null
