@@ -128,7 +128,8 @@ attributes.
 
 ## Priority 3 — Duplicate/confusing pages
 
-13. `src/pages/Index.tsx` (route `/`) and `src/components/auth/AuthPage.tsx`
+13. **DONE (2026-09-23, commit `cb43ac3`) — user picked option (a).**
+    `src/pages/Index.tsx` (route `/`) and `src/components/auth/AuthPage.tsx`
     (route `/auth`) are two separate, nearly-identical login pages, each
     independently rendering `<SignInForm />` with its own copy of the
     logo/heading markup. `Index.tsx` additionally renders a "Need to create
@@ -203,7 +204,8 @@ attributes.
 - [ ] Priority 2 dead files removed, `git log` shows one clean commit per
       logical group (don't squash unrelated cleanup into the Priority 0 fix
       commit).
-- [ ] Priority 3 decision made with the user, not unilaterally.
+- [x] Priority 3 decision made with the user (option (a) — single login
+      page at `/`, `/auth` redirects), shipped 2026-09-23, commit `cb43ac3`.
 - [ ] Priority 4 item 15 and 16 shipped; item 14 flagged back rather than
       guessed at.
 - [ ] Any Supabase migration or edge-function redeploy logged in
