@@ -93,8 +93,8 @@ verify_jwt-after: n/a
 artifact: deployment dpl_5dNv19EKaYXzvWCFzFtdP3QBrLZr (created 2026-09-22,
   before this fix) vs. the deployment this commit's push should trigger —
   compare `githubCommitSha` on each via `list_deployments`/`get_deployment`
-commit: <this commit, see git log>
-status: in-progress
+commit: 4d7dbd1 (the fix-confirming push; see body for the full chain)
+status: done
 related-entries: entry-legacy-20260921-2215
 
 Not an edge function or Make scenario, but a real production incident
@@ -124,12 +124,12 @@ conflate since both show a GitHub icon. A push made between the two
 attempts (commit `d8a5283`) triggered nothing, confirming the first
 attempt hadn't actually linked the project. The project's `updatedAt`
 timestamp changed only after the second attempt, which is what this
-commit's push is testing. Verify after: the next `list_deployments` call
-for this project should show a new `production` deployment with
-`githubCommitRef: "main"` and a commit SHA from today's session, not
-`89e2ba7`. If it still doesn't fire, the next thing to check is whether
-the Vercel GitHub App itself has been granted access to this specific repo
-in GitHub's own Settings → Integrations, not just Vercel's side.
+commit's push is testing. **Confirmed fixed.** The push carrying this entry's own prior revision
+(`4d7dbd1`) triggered `dpl_CnFFj3iQG1zf2H4gdtgWhcwakYks` — `source: "git"`,
+`githubCommitRef: "main"`, built and reached `READY` in ~14 seconds, and
+its `alias` list includes `inrange.jetreadvisors.com`. Auto-deploy on push
+to `main` is confirmed working again. Every commit from this session
+(2026-09-23) is now actually live, not just merged.
 
 <a id="entry-20260923-02"></a>
 ## [2026-09-23T16:50Z] other:auth-config — leaked-password protection enabled, closing fix-plan item 7
