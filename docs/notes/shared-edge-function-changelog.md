@@ -81,6 +81,50 @@ Field notes:
 
 ---
 
+<a id="entry-20260923-08"></a>
+## [2026-09-23T23:02Z] edge-function:invite-agent — fixed missing CORS handling (OPTIONS + json() headers)
+agent: perplexity-computer
+entry-id: 20260923-08
+target-type: edge-function
+target-id: invite-agent
+window-check: yes
+verify_jwt-before: true
+verify_jwt-after: true
+artifact: curl OPTIONS + POST against live function, both showing Access-Control-Allow-Origin
+commit: 46d0280
+status: done
+related-entries: entry-20260923-07
+
+`invite-agent` had no `OPTIONS` handling and its local `json()` helper never
+attached CORS headers, so the newly-wired `InviteAgentDialog` (fixed in
+entry-20260923-07) would hit a browser CORS block on the real invite call
+even though the function itself worked fine when called directly. Added
+`if (req.method === 'OPTIONS') return handleOptions();` as the first line
+inside `serve()`, and updated `json()` to spread `...corsHeaders` into its
+response headers -- reusing the existing `supabase/functions/_shared/cors.ts`
+helpers already used by `enrich-property`, rather than adding a new local
+corsHeaders block (avoids yet another duplicate, same lesson as the
+`current_team_agent_id()` dedup in entry-20260923-07).
+
+**Deploy note:** the first two `deploy_edge_function` calls in this fix
+accidentally shipped placeholder-content test payloads (v11, v12) before
+the real code went out as v13 -- caught and corrected within the same few
+seconds, verified curl output below is against the final v13.
+
+Verified live: `curl -X OPTIONS .../invite-agent` -> `200` with
+`access-control-allow-origin: *`, `-allow-headers`, `-allow-methods` all
+present; `curl -X POST .../invite-agent` with no auth -> clean `401 JSON`
+(gateway-level, before my code even runs) still carrying
+`access-control-allow-origin: *`. Did not touch any other function --
+a broader sweep found ~20 other functions in this repo missing the same
+`_shared/cors.ts` import (`assign-leads`, `claim-lead`, `enrich-leads`,
+`rescore-properties`, several `ingest-*` functions, etc.), but most of
+those are Make-only/server-to-server and not called from a browser, so I
+left them unchanged pending confirmation of which ones are actually
+browser-facing.
+
+---
+
 <a id="entry-20260923-07"></a>
 ## [2026-09-23T22:10Z] migration+edge-function:properties_agent_assignment_and_rls, enrich-properties-batch — executed the approved admin/enrichment/assignment plan
 agent: perplexity-computer
