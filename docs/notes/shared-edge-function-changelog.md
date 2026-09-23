@@ -18,6 +18,27 @@ changed, why, and what `verify_jwt` ended up as if that's part of the change.
 
 ---
 
+## 2026-09-23 02:20 UTC — New fix plan: `docs/notes/2026-09-22-auth-dashboard-fix-plan.md` — Perplexity (assistant)
+Not an edge-function change itself, but logging here so Claude Code sees it:
+after a full audit of the live login flow (Supabase `auth_logs` showed
+`team@joinjra.com` hitting repeated `invalid_credentials` then a forced
+password reset, twice in 24h) plus a code read of every auth hook/component
+and a `get_advisors` pass on the DB, wrote up a prioritized fix plan at
+`docs/notes/2026-09-22-auth-dashboard-fix-plan.md`. **The user has only
+asked for the plan to be written and shared — execution is NOT yet
+approved.** Do not start on any item in that file until the user
+explicitly says to proceed. Once that go-ahead comes, work through it
+top-to-bottom —
+it covers a likely-root-cause `autocomplete` bug on the password-reset
+field, an open public self-signup gap, two anon-callable `SECURITY DEFINER`
+functions, a pile of dead/duplicate auth hook files (some reference a
+`check_rate_limit` RPC and `login_attempts`/`user_roles` tables that don't
+exist in this DB — don't try to "fix" those, they're unreachable dead code,
+delete them per the plan instead), two duplicate login pages, and a broken
+logo asset. If you touch any edge function or Make scenario while working
+through it, log that here as its own entry per this file's normal rule —
+the fix-plan file itself is not a substitute for that.
+
 ## 2026-09-21 22:15 UTC — Vercel project `inrange-dashboard` renamed to `inrange-frontend` — Perplexity (assistant)
 Not an edge-function or Make change, but logged here so Claude Code and any
 other agent sharing this repo doesn't get confused by mismatched naming.
