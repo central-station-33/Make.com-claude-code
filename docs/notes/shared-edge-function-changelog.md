@@ -81,6 +81,32 @@ Field notes:
 
 ---
 
+<a id="entry-20260923-06"></a>
+## [2026-09-23T21:45Z] code-only:docs/notes/2026-09-23-admin-enrichment-assignment-plan.md — persisted PLAN ONLY doc, no code/infra change
+agent: perplexity-computer
+entry-id: 20260923-06
+target-type: code-only
+target-id: docs/notes/2026-09-23-admin-enrichment-assignment-plan.md
+window-check: yes
+verify_jwt-before: n/a
+verify_jwt-after: n/a
+artifact: plan doc only, no deploy
+commit: (see this commit)
+status: in-progress
+related-entries: n/a
+
+User asked for a plan to give team@joinjra.com full admin control, add
+dashboard enrichment of the 924 `properties` rows, add lead-to-agent
+assignment on `properties`, and agent onboarding. Diagnosed current state
+(team@joinjra.com already has broker-level access via team_agents +
+properties RLS; /dashboard route is broken against the live schema;
+/inrange/leads is the working page; no assigned_agent_id on properties;
+assign-leads/claim-lead target isa_leads, not properties). No code, schema,
+edge function, or RLS change made — plan doc only, pending user decisions
+and approval. See the plan doc for the diagnosis table and phased proposal.
+
+---
+
 <a id="entry-20260923-05"></a>
 ## [2026-09-23T22:05Z] code-only:AuthFormContext — root-caused the Set Password silent-failure bug from entry-20260923-04
 agent: claude-code
