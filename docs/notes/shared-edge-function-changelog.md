@@ -81,6 +81,45 @@ Field notes:
 
 ---
 
+<a id="entry-20260923-03"></a>
+## [2026-09-23T18:55Z] other:vercel-deploy — GitHub-Vercel Git connection was disconnected, reconnected
+agent: claude-code
+entry-id: 20260923-03
+target-type: other
+target-id: vercel-project:prj_nOePJcq0wPWzE7mxjvktOec2C3sO
+window-check: n/a
+verify_jwt-before: n/a
+verify_jwt-after: n/a
+artifact: deployment dpl_5dNv19EKaYXzvWCFzFtdP3QBrLZr (created 2026-09-22,
+  before this fix) vs. the deployment this commit's push should trigger —
+  compare `githubCommitSha` on each via `list_deployments`/`get_deployment`
+commit: <this commit, see git log>
+status: done
+related-entries: entry-legacy-20260921-2215
+
+Not an edge function or Make scenario, but a real production incident
+worth recording here: discovered mid-session that `inrange.jetreadvisors.com`
+was serving a stale build from commit `89e2ba7` (a since-closed PR branch,
+`claude-code/log-rename-inrange-frontend`) — every commit made in this
+session (today, 2026-09-23) had merged to `main` but never deployed.
+Root cause: the Vercel project's Connected Git Repository (Project Settings
+→ Git) had no repository connected at all — confirmed visually, the page
+showed the "choose a provider" picker, not a connected-repo state. Given
+this repo's own history of renames (`Make.com-claude-code` →
+`inrange-dashboard` → `inrange-frontend`, logged in the legacy entries
+below), the connection likely broke silently during one of those renames
+and nobody caught it since manual "Redeploy" on an old deployment still
+appeared to work (it just rebuilds the same stale commit, which looks
+successful in the dashboard without being new).
+
+User reconnected GitHub → `central-station-33/inrange-frontend` in the
+Vercel dashboard. Reconnecting alone doesn't retroactively deploy anything
+already merged — it only re-arms the webhook for future pushes — so this
+commit (and its push) is what actually tests and triggers the fix. Verify
+after: the next `list_deployments` call for this project should show a new
+`production` deployment with `githubCommitRef: "main"` and a commit SHA
+from today's session, not `89e2ba7`.
+
 <a id="entry-20260923-02"></a>
 ## [2026-09-23T16:50Z] other:auth-config — leaked-password protection enabled, closing fix-plan item 7
 agent: claude-code
@@ -426,6 +465,7 @@ logo asset. If you touch any edge function or Make scenario while working
 through it, log that here as its own entry per this file's normal rule —
 the fix-plan file itself is not a substitute for that.
 
+<a id="entry-legacy-20260921-2215"></a>
 ## 2026-09-21 22:15 UTC — Vercel project `inrange-dashboard` renamed to `inrange-frontend` — Perplexity (assistant)
 Not an edge-function or Make change, but logged here so Claude Code and any
 other agent sharing this repo doesn't get confused by mismatched naming.
