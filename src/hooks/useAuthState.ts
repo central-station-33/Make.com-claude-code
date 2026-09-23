@@ -66,13 +66,17 @@ export const useAuthState = () => {
           setUser(session?.user ?? null);
           
           // Fetch user role if session exists
+          // NOTE: there is no `user_roles` table in this database -- role
+          // lives on `team_agents.role`, keyed by `auth_user_id`. Querying
+          // `user_roles` always errored (table doesn't exist), so
+          // `userRole` silently stayed null for every signed-in user.
           if (session?.user) {
             const { data: roleData, error: roleError } = await supabase
-              .from('user_roles')
+              .from('team_agents')
               .select('role')
-              .eq('user_id', session.user.id)
-              .single();
-              
+              .eq('auth_user_id', session.user.id)
+              .maybeSingle();
+
             if (!roleError && roleData) {
               setUserRole(roleData.role);
             }
@@ -100,11 +104,11 @@ export const useAuthState = () => {
         
         if (session?.user) {
           const { data, error: roleError } = await supabase
-            .from('user_roles')
+            .from('team_agents')
             .select('role')
-            .eq('user_id', session.user.id)
-            .single();
-          
+            .eq('auth_user_id', session.user.id)
+            .maybeSingle();
+
           if (!roleError && data) {
             setUserRole(data.role);
           }

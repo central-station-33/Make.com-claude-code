@@ -28,13 +28,15 @@ export const useAuthState = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
+        // NOTE: there is no `user_roles` table in this database -- role
+        // lives on `team_agents.role`, keyed by `auth_user_id`.
         if (session?.user) {
           const { data, error } = await supabase
-            .from('user_roles')
+            .from('team_agents')
             .select('role')
-            .eq('user_id', session.user.id)
-            .single();
-            
+            .eq('auth_user_id', session.user.id)
+            .maybeSingle();
+
           if (!error && data) {
             setUserRole(data.role);
           }
@@ -53,11 +55,11 @@ export const useAuthState = () => {
 
       if (session?.user) {
         const { data, error } = await supabase
-          .from('user_roles')
+          .from('team_agents')
           .select('role')
-          .eq('user_id', session.user.id)
-          .single();
-          
+          .eq('auth_user_id', session.user.id)
+          .maybeSingle();
+
         if (!error && data) {
           setUserRole(data.role);
         }

@@ -131,6 +131,7 @@ const SignInForm = memo(() => {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={signingUp}
                 placeholder="Create a password"
+                autoComplete="new-password"
               />
             </div>
             <Button type="submit" className="w-full" disabled={signingUp || !email || !password}>
@@ -174,12 +175,13 @@ const SignInForm = memo(() => {
             onChange={(e) => setPassword(e.target.value)}
             disabled={isLoading}
             placeholder="Enter your password"
+            autoComplete="current-password"
           />
         </div>
         <Button type="submit" className="w-full" disabled={isLoading || isRateLimited || !email || !password}>
           {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...</> : 'Sign In'}
         </Button>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <Button type="button" variant="link" onClick={() => setMode('signup')} className="text-gray-600 hover:text-gray-900 px-0">
             No account? Create one
           </Button>

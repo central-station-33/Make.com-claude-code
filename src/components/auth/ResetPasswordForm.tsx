@@ -2,7 +2,7 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PasswordField } from './form-fields/PasswordField';
+import { PasswordField, passwordRequirements } from './form-fields/PasswordField';
 import { useAuthForm } from '@/contexts/auth/AuthFormContext';
 import { useState } from 'react';
 
@@ -24,7 +24,13 @@ const ResetPasswordForm = ({ onBackToSignIn, token }: ResetPasswordFormProps) =>
     await handleResetPassword(token, password);
   };
 
-  const isValidPassword = password && password === confirmPassword && password.length >= 6;
+  // Match the checklist PasswordField actually displays (showRequirements)
+  // instead of a separate, looser length-only check -- previously this let
+  // "Set Password" enable at 6 characters while the on-screen checklist
+  // still showed several rules unmet, which is confusing and let weak
+  // passwords through despite the UI implying otherwise.
+  const meetsAllRequirements = passwordRequirements.every(({ rule }) => rule.test(password));
+  const isValidPassword = Boolean(password) && password === confirmPassword && meetsAllRequirements;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -50,6 +56,7 @@ const ResetPasswordForm = ({ onBackToSignIn, token }: ResetPasswordFormProps) =>
           label="New Password"
           id="new-password"
           placeholder="Enter your new password"
+          autoComplete="new-password"
         />
         <PasswordField
           password={confirmPassword}
@@ -58,6 +65,7 @@ const ResetPasswordForm = ({ onBackToSignIn, token }: ResetPasswordFormProps) =>
           label="Confirm Password"
           id="confirm-password"
           placeholder="Confirm your new password"
+          autoComplete="new-password"
         />
       </div>
       <div className="space-y-4">

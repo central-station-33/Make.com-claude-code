@@ -1,17 +1,19 @@
 # InRange auth/dashboard fix plan — 2026-09-22
 
-**Status: PLAN ONLY — NOT YET APPROVED FOR EXECUTION.** Written by
-Perplexity Computer after a full audit of the live login flow, the
-`inrange-frontend` repo, and the Supabase project (`omzugrtgwsjypekuzgtn`).
-The user has asked for this plan to be written and shared, but has **not**
-authorized starting any of the work in it. Claude Code: do not begin
-executing any item below until the user has explicitly said to proceed
-(either in this repo/changelog or directly to whichever agent is about to
-act) — treat every item, not just the ones already called out as needing
-confirmation, as blocked on that go-ahead. Once approved, work top-to-bottom,
-commit as you go, and log any edge-function or Make.com change in
-`docs/notes/shared-edge-function-changelog.md` per the rule at the top of
-that file.
+**Status: EXECUTION APPROVED, IN PROGRESS.** Written by Perplexity Computer
+after a full audit of the live login flow, the `inrange-frontend` repo, and
+the Supabase project (`omzugrtgwsjypekuzgtn`). The user has approved
+executing this plan. Priority 0 (root cause), Priority 1 items 6/8 (and 9
+attempted — see the 2026-09-23 03:05 UTC entry in
+`docs/notes/shared-edge-function-changelog.md` for why it couldn't be
+applied), Priority 2 (dead code, with one correction to this doc's own item
+10 — see that changelog entry), and Priority 4 items 15/16 are done as of
+that entry. Still open and requiring a direct answer from the user before
+anyone touches them: item 5 (self-signup removal), item 7 (dashboard
+toggle), item 13 (duplicate-page decision), item 14 (logo asset). Claude
+Code: re-read the changelog entry above before picking up any remaining
+item — don't re-do what's already shipped, and don't touch 5/7/13/14
+without the user's explicit answer landing in that same changelog first.
 
 Evidence backing every item here is in the Perplexity Computer session that
 produced this plan (Supabase `auth_logs`, `get_advisors`, and direct reads of

@@ -18,6 +18,62 @@ changed, why, and what `verify_jwt` ended up as if that's part of the change.
 
 ---
 
+## 2026-09-23 03:05 UTC — Auth/dashboard fix plan: DB + code changes shipped — Perplexity (assistant)
+User approved execution of `docs/notes/2026-09-22-auth-dashboard-fix-plan.md`.
+Shipped so far (not an edge function per se, but logging DB migrations here
+since this file is the cross-agent coordination point):
+
+- Migration `fix_increment_ai_budget_spend_search_path` — pinned search_path
+  on `public.increment_ai_budget_spend` (plan item 8).
+- Migration `revoke_anon_execute_on_internal_auth_functions` +
+  `revoke_anon_direct_execute_grant_on_internal_functions` — revoked `anon`'s
+  EXECUTE on `public.is_broker()` / `public.current_team_agent_id()`;
+  confirmed via `pg_policies` that every RLS policy referencing these two
+  functions is scoped to `{authenticated}` only, so nothing anon-facing
+  depended on it. `authenticated` still has EXECUTE (plan item 6).
+- Regenerated `src/integrations/supabase/types.ts` — it was stale and
+  missing several live tables including `team_agents`, which the item-11 fix
+  below needed.
+- Fixed `src/hooks/useAuthState.ts` and `src/hooks/auth/useAuthState.ts`
+  (both are live — confirmed by import graph, correcting the plan doc's
+  original item 11 wording) to query `team_agents.role` via `auth_user_id`
+  instead of the nonexistent `user_roles` table. This was a real live bug:
+  `userRole` silently stayed `null` for every signed-in user because the old
+  query always errored. Note for whoever picks up Priority-3-adjacent work:
+  the only current `team_agents` row has `role = 'broker'`, not `'admin'` or
+  `'owner'` — the `userRole === 'owner'` UI in `DashboardContainer.tsx` and
+  the `requireAdmin` check in `PrivateRoute.tsx` won't match until/unless
+  someone decides the intended role taxonomy; flagged back to the user
+  rather than inventing a mapping.
+- Shipped plan item 0 (P0 root cause) and items 10, 12, 15, 16 — see the
+  `inrange-frontend` commit(s) right after this changelog entry for the file
+  list. `npm run build` and `tsc --noEmit` both pass clean after all of the
+  above.
+- Correction to the plan doc itself: item 10 incorrectly listed
+  `src/hooks/useAuthFormState.ts` (root) and `src/hooks/useAuthActions.ts`
+  as dead — re-verified via `grep` before deleting anything and both are
+  actually live (imported by `AuthFormContext.tsx` / `AuthContext.tsx`
+  respectively). Did NOT delete them. Only the confirmed-dead files were
+  removed; see commit for the exact list.
+- Plan item 9 (move `pg_net` out of `public`): attempted via
+  `ALTER EXTENSION pg_net SET SCHEMA net;` — Postgres rejected it
+  ("cannot move extension pg_net into schema net because the extension
+  contains the schema"). This looks like a known pg_net quirk where
+  `pg_extension.extnamespace` reports `public` even though the extension's
+  real tables already live in `net` — not safely actionable without
+  dropping/recreating the extension (risk to the existing http request/
+  response queue), so left as-is. Low-severity WARN, not blocking.
+- Reviewed plan item 20 (`ai_budget_tracker` / `isa_leads_dedupe_backup_20260921`
+  RLS-enabled-no-policy, INFO level): both are only ever touched by
+  service_role (edge functions), which bypasses RLS — no anon/authenticated
+  code path touches either table, so "no policy" is actually the safe
+  default-deny state already. No action taken, not a real gap.
+- Still open / needs the user directly, not code: plan item 5 (remove
+  public self-signup — needs a yes/no), item 7 (enable leaked-password
+  protection — Auth dashboard toggle, can't be done from this repo), item
+  13 (which duplicate login page to keep), item 14 (broken logo — needs a
+  corrected source file).
+
 ## 2026-09-23 02:20 UTC — New fix plan: `docs/notes/2026-09-22-auth-dashboard-fix-plan.md` — Perplexity (assistant)
 Not an edge-function change itself, but logging here so Claude Code sees it:
 after a full audit of the live login flow (Supabase `auth_logs` showed

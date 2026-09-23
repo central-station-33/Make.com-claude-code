@@ -12,9 +12,22 @@ export interface PasswordFieldProps {
   label?: string;
   id?: string;
   placeholder?: string;
+  /**
+   * 'current-password' (default) tells the browser this is the password
+   * the user already knows -- use that for a sign-in field. 'new-password'
+   * tells it this is a password being set/changed -- use that for signup
+   * and password-reset fields, otherwise the browser/password manager can
+   * autofill or resave the wrong value here (this mismatch was a likely
+   * contributor to the recurring login failures -- see
+   * docs/notes/2026-09-22-auth-dashboard-fix-plan.md, item 1).
+   */
+  autoComplete?: 'current-password' | 'new-password';
 }
 
-const passwordRequirements = [
+// Exported so callers (e.g. ResetPasswordForm) can gate submission on the
+// same rules this component displays, instead of a separate, looser check
+// that doesn't match what the checklist shows the user.
+export const passwordRequirements = [
   { rule: /.{8,}/, text: 'At least 8 characters' },
   { rule: /[A-Z]/, text: 'One uppercase letter' },
   { rule: /[a-z]/, text: 'One lowercase letter' },
@@ -29,7 +42,8 @@ export const PasswordField = ({
   showRequirements = false,
   label = "Password",
   id = "password",
-  placeholder = "Enter your password"
+  placeholder = "Enter your password",
+  autoComplete = "current-password"
 }: PasswordFieldProps) => {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -48,7 +62,7 @@ export const PasswordField = ({
           disabled={isLoading}
           className="w-full pr-10"
           placeholder={placeholder}
-          autoComplete="current-password"
+          autoComplete={autoComplete}
           aria-label={label}
         />
         <Button
