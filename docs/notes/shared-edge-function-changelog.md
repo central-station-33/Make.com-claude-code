@@ -81,6 +81,53 @@ Field notes:
 
 ---
 
+<a id="entry-20260923-05"></a>
+## [2026-09-23T22:05Z] code-only:AuthFormContext — root-caused the Set Password silent-failure bug from entry-20260923-04
+agent: claude-code
+entry-id: 20260923-05
+target-type: code-only
+target-id: src/contexts/auth/AuthFormContext.tsx, src/hooks/useAuthFormState.ts
+window-check: yes
+verify_jwt-before: n/a
+verify_jwt-after: n/a
+artifact: `npx tsc --noEmit` clean, `npx vite build` clean
+commit: (this commit's own SHA — see git log)
+status: done
+related-entries: entry-20260923-04
+
+Root cause of the "Set Password button does nothing" bug logged in
+entry-20260923-04: `AuthFormContext.tsx` mounted two independent state
+hooks — `useAuthFormState()` (root, `src/hooks/useAuthFormState.ts`) and
+`useAuthFormProvider()` (which internally mounts its own
+`src/hooks/auth/useAuthState.ts`). The context exposed `isLoading`,
+`error`, and `success` from the *first* hook, but every handler that
+actually calls Supabase (`handleSignIn`, `handleForgotPassword`,
+`handleResetPassword`, all wired through `useAuthFormProvider`) updates the
+*second* hook's state instead. Net effect: `supabase.auth.updateUser()`
+genuinely ran and succeeded (matches the two 200s logged in
+entry-20260923-04), but the `isLoading`/`success`/`error` values every
+consumer component reads (`ResetPasswordForm`, `SignInForm`) never moved —
+no spinner, no success alert, no inline error, on both the password-reset
+form and the ordinary sign-in form. Toasts fired independently (a separate
+global store, unaffected by this), which is likely why the very first
+successful submission wasn't obviously silent, and later ones were.
+
+Fix: `AuthFormContext.tsx` now sources `isLoading`/`error`/`success` from
+`authFormProvider` (the hook instance the handlers actually update) instead
+of the disconnected `authState`. Removed the now-dead `isLoading`/`error`/
+`success` state from `src/hooks/useAuthFormState.ts`, which after this fix
+only tracks `email` and the rate-limit fields (those were left alone —
+still sourced from the same hook on both sides, not part of this bug, and
+out of scope here).
+
+**Not fully closed**: this explains and fixes the "succeeded but showed
+nothing" pattern. It does not explain the separate report of *zero*
+`/auth/v1/user` network activity on later attempts, even after manually
+retyping both password fields — that could not be root-caused without
+browser console access, which wasn't available. If it recurs post-fix, the
+button will now at least show a real spinner or error, which should make
+the next occurrence far easier to diagnose.
+
 <a id="entry-20260923-04"></a>
 ## [2026-09-23T21:30Z] code-only:auth-reset-flow — Priority 0 reset+login cycle confirmed; new domain finding; new open bug
 agent: claude-code
