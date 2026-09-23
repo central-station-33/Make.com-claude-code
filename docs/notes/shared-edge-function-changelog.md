@@ -81,6 +81,47 @@ Field notes:
 
 ---
 
+<a id="entry-20260923-07"></a>
+## [2026-09-23T22:10Z] migration+edge-function:properties_agent_assignment_and_rls, enrich-properties-batch — executed the approved admin/enrichment/assignment plan
+agent: perplexity-computer
+entry-id: 20260923-07
+target-type: migration
+target-id: properties_agent_assignment_and_rls, dedupe_agent_id_helper_use_existing, enrich-properties-batch
+window-check: yes
+verify_jwt-before: n/a (new function)
+verify_jwt-after: true
+artifact: apply_migration success + get_advisors clean + npm run build clean
+commit: 4a5b325
+status: done
+related-entries: entry-20260923-06
+
+Executed the plan persisted in entry-20260923-06 after full user approval.
+Applied two Supabase migrations directly (not checked in as SQL files --
+noted here per protocol): added `properties.assigned_agent_id` + index,
+replaced the single open `properties` RLS policy with broker-full-access +
+agent-own-rows-only policies. Discovered `current_team_agent_id()` already
+existed (identical to a helper I'd added) and already backs this exact
+pattern on `isa_leads`/`deals`/`lead_touches` -- repointed the new policies
+at it and dropped my duplicate in a follow-up migration, so `properties`
+now matches the existing schema convention exactly. Fixed
+`team@joinjra.com`'s `team_agents` row (full_name/brokerage) per approval.
+Deployed new edge function `enrich-properties-batch` (verify_jwt:true,
+broker-gated, shares the `ai_budget_tracker`/`increment_ai_budget_spend`
+gate with `enrich-leads`) -- v1 was deployed with placeholder content by
+mistake and immediately corrected to v2 with the real code before any
+traffic. Did not touch `enrich-property`, `enrich-pending`,
+`process-raw-properties`, `rescore-properties`, `assign-leads`, or
+`claim-lead` -- all pre-existing gaps/behavior on those are unchanged.
+Frontend changes (InRangeAddLead/Leads/LeadDetail/Team/Dashboard/SidebarNav,
+new AgentAssignSelect/useCurrentTeamAgent, fixed InviteAgentDialog stub) are
+in the same commit. `npx tsc --noEmit` and `npm run build` both clean.
+See `docs/notes/2026-09-23-admin-enrichment-assignment-plan.md` section 6
+for the full execution summary, including the corrected `/dashboard`
+diagnosis (it was never broken -- a separate dead component tree was
+misread as the live route in the original plan).
+
+---
+
 <a id="entry-20260923-06"></a>
 ## [2026-09-23T21:45Z] code-only:docs/notes/2026-09-23-admin-enrichment-assignment-plan.md — persisted PLAN ONLY doc, no code/infra change
 agent: perplexity-computer
