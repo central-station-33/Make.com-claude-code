@@ -91,7 +91,7 @@ window-check: yes
 verify_jwt-before: n/a
 verify_jwt-after: n/a
 artifact: `npx tsc --noEmit` clean, `npx vite build` clean
-commit: (this commit's own SHA — see git log)
+commit: 30d5b3e
 status: done
 related-entries: entry-20260923-04
 
