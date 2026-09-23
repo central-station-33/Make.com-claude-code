@@ -106,6 +106,212 @@ references to `send-auth-email` or `sendAuthEmail` remain anywhere in
 
 ---
 
+**The five entries below (20260922-02 down to 20260921-01) are backfilled.**
+They document real events from 2026-09-21/22 that were originally written up
+as prose in PRs #22 and #23, opened as separate branches before this file's
+v2 restructure landed and never merged. Merging either as-is would have
+silently placed old-format entries inside the "Legacy entries" section below,
+so instead their content is reproduced here in the current structured format
+— condensed for the header fields, otherwise preserved as originally
+written — and both PRs were closed once this landed. `commit` is `n/a` on
+these because the underlying actions (Supabase deploys, a Make scenario
+edit, a GitHub repo rename) never had a corresponding commit in this repo;
+only this backfill commit does.
+
+<a id="entry-20260922-02"></a>
+## [2026-09-22T03:00Z] other:repo-naming — naming mismatch found, changelog merge-conflict resolved
+agent: claude-code
+entry-id: 20260922-02
+target-type: other
+target-id: repo-naming
+window-check: n/a
+verify_jwt-before: n/a
+verify_jwt-after: n/a
+artifact: n/a — see body; no single checkable artifact for a naming discrepancy
+commit: n/a
+status: in-progress
+related-entries: entry-20260922-01
+
+Not an edge-function or Make change. Third naming action on this repo/Vercel
+project pair in about 6 hours — confusing enough to need its own entry.
+
+What was true at the time, verified directly (GitHub API + a real clone +
+live Vercel deployment metadata, not narrative): the GitHub repo was at that
+point named `inrange-dashboard`, not `inrange-frontend` — renamed again by
+Perplexity per commits `72c4c89` and `81e3e22` on `main` (real timestamps
+~02:17–02:19 UTC 2026-09-22 per `git log`, not the "2026-09-21 22:15 UTC"
+the legacy entry below states — that header appears mislabeled by about 4
+hours plus a day, though the action it describes is real). The Vercel
+project's own display name was `inrange-frontend` at the same time — so
+GitHub and Vercel disagreed, just swapped from before.
+
+The legacy entry below also states the Vercel project's pre-rename name was
+`inrange-dashboard`; that didn't reconcile with this session's own repeated,
+direct observation that `get_project` on the same project id
+(`prj_nOePJcq0wPWzE7mxjvktOec2C3sO`) returned `make-com-claude-code`
+continuously, right up until it changed to `inrange-frontend` immediately
+after the GitHub rename logged in the entry below. Not asserting the legacy
+entry was wrong — the two accounts didn't line up, flagged for whoever
+sorted it out next.
+
+Reported to the project owner at the time; no further rename was made
+unilaterally. As of this backfill (2026-09-23), the repo is confirmed named
+`inrange-frontend` per this session's own context — the immediate confusion
+resolved itself one way or another, but whether the underlying GitHub/Vercel
+naming discrepancy was ever actually reconciled, versus the names just
+happening to agree now, was never confirmed in this file. Left `status:
+in-progress` for that reason rather than backfilling it as `done`.
+
+<a id="entry-20260922-01"></a>
+## [2026-09-22T00:55Z] other:repo-rename — GitHub repo renamed Make.com-claude-code → inrange-frontend
+agent: claude-code
+entry-id: 20260922-01
+target-type: other
+target-id: repo-rename
+window-check: n/a
+verify_jwt-before: n/a
+verify_jwt-after: n/a
+artifact: n/a — see body; verify by the repo's current name/redirect behavior, not a SHA
+commit: n/a
+status: done
+related-entries: entry-20260922-02
+
+At the project owner's direction. Not an edge-function or Make-scenario
+change, but relevant to anyone working from this repo by its old name: the
+GitHub repo this changelog lives in was renamed from `Make.com-claude-code`
+to `inrange-frontend`. Reason: this repo is the actual live InRange
+dashboard/frontend (`src/pages`, `src/routes`,
+`src/integrations/supabase/inrange.ts` wired to `omzugrtgwsjypekuzgtn`,
+deployed to Vercel and aliased to the real production domain,
+`inrange.jetreadvisors.com`) — the old name was a leftover scaffold default
+(`package.json` still said `vite_react_shadcn_ts`) that hid this from anyone
+looking for "the InRange frontend" by name.
+
+GitHub redirects the old name transparently for git and API access (both
+names resolved to the same commit during the change), so existing clones
+and remotes using `Make.com-claude-code` kept working without
+reconfiguration.
+
+Old name for cross-reference: `central-station-33/Make.com-claude-code`.
+Unrelated repos also named "InRange"-adjacent, noted at the time to avoid
+the same confusion recurring: `central-station-33/InRange` (backend
+pipeline only, no frontend) and `central-station-33/nextjs-inrange` (a dead
+`create-next-app` scaffold — not this repo, not deployed anywhere).
+
+<a id="entry-20260921-03"></a>
+## [2026-09-21T23:35Z] edge-function:enrich-leads — derive routing from scores instead of trusting the model
+agent: claude-code
+entry-id: 20260921-03
+target-type: edge-function
+target-id: enrich-leads
+window-check: yes
+verify_jwt-before: false
+verify_jwt-after: false
+artifact: supabase-version:41
+commit: n/a
+status: done
+related-entries: entry-20260921-01
+
+No prior entry in this file touched `enrich-leads` at the time — checked
+before deploying, clear. The function computed `bant_score` correctly from
+the model's own component scores, then separately trusted whatever
+`routing` string the model also returned, if it was one of the four valid
+values. Checked against all 172 enriched rows at the time (162 live + 10 in
+a dedupe backup table): 151 agreed with the prompt's own stated routing
+rules, 21 didn't (12%) — including identical duplicate rows (same
+`bant_score`, same `motivation_score`) that came back with different
+`routing` on different runs, which is what non-determinism in a business
+rule looks like from outside. Fix: added
+`deriveRouting(bantScore, motivationScore)`, applying the prompt's own four
+rules in code; the model's `routing` field is still requested (prompt
+unchanged, `ENRICH_PROMPT_VERSION` not bumped) but no longer read. Deployed
+v41, `verify_jwt: false` (matched what was already there, no gateway
+change).
+
+Backfilled the 19 already-wrong live rows from
+`bant_score`/`motivation_score` already stored on each — no re-enrichment,
+no Anthropic spend. Re-checked after: 162/162 agree, 0 violations. Two of
+the 19 corrections were `hot` → `warm` demotions (`Andrew Thomas`, `Tremaine
+Edmunds`) that had already gone out in the real "ISA Notify Receiver"
+emails sent per the entry below, labeled `HOT` when the correct label was
+`WARM` — the notification itself was correct to fire, the urgency label on
+those two was wrong at send time.
+
+<a id="entry-20260921-02"></a>
+## [2026-09-21T23:31Z] edge-function:ingest-leads — restored verify_jwt: false
+agent: claude-code
+entry-id: 20260921-02
+target-type: edge-function
+target-id: ingest-leads
+window-check: no
+verify_jwt-before: true
+verify_jwt-after: false
+artifact: supabase-version:39
+commit: n/a
+status: done
+related-entries: entry-legacy-20260921-2131
+
+Confirms the "agent unconfirmed" attribution on the legacy entry below dated
+2026-09-21 21:31 UTC: that was Claude Code. That earlier deploy (the
+comma/ilike fix) redeployed `ingest-leads` without having seen this file —
+it didn't exist in this agent's working set yet — and preserved whatever
+`verify_jwt` the function already had (`true`) rather than checking it
+against convention, silently re-reverting the fix Perplexity Computer had
+made for exactly this function ~1 hour earlier. This entry: deployed v39,
+`verify_jwt: false`, no code change from v38 — just the gateway flag, back
+to matching every sibling function's custom `x-make-secret` auth. Caught by
+reading this changelog before a *different* deploy (`enrich-leads`) and
+noticing an earlier entry already existed, written by someone else,
+describing a collision not previously known to have been caused. No code
+diff this time — logging so the loop closes.
+
+<a id="entry-20260921-01"></a>
+## [2026-09-21T23:15Z] make-scenario:5077766 — ISA Notify Receiver: added real email delivery
+agent: claude-code
+entry-id: 20260921-01
+target-type: make-scenario
+target-id: 5077766
+window-check: no
+verify_jwt-before: n/a
+verify_jwt-after: n/a
+artifact: scenario:5077766 — added google-email:sendAnEmail module
+commit: n/a
+status: done
+related-entries: entry-legacy-20260921-2016
+
+Built on top of Perplexity Computer's 20:16 UTC fix on this same scenario
+(legacy entry below — `log-touch` module removed) without first checking
+this file for who made it or when — the blueprint read right before editing
+was already just webhook-in → webhook-respond, which matches that fix
+exactly, so this turned out to be additive, not a collision, but that was
+luck from reading the live blueprint, not from following the check-first
+rule. Added a `google-email:sendAnEmail` module between the two existing
+ones, using the account's existing Gmail OAuth connection
+(`jtaffairs@gmail.com`, id `11132254`), populated from fields `notify-isa`
+already assembles (name, `ai_summary`, talking points, BANT/motivation
+scores, contact, commission split) but had nowhere to send until now.
+
+Separately found and fixed, not a shared-function code change but relevant
+to anyone else touching this path: `notify-isa` marks a lead
+`outreach_status = 'attempting'` as soon as the webhook call returns 200 —
+and this receiver always returned 200 regardless of what (if anything)
+happened downstream. So every notify attempt before this fix "succeeded"
+and permanently removed the lead from the `'new'` pool `notify-isa`
+re-queries, without anything ever being sent — presumably also why the
+pre-fix receiver got away with doing nothing for as long as it did, nothing
+ever errored. Reset the 23 leads (7 hot, 16 warm) this had already stranded
+back to `'new'` and re-ran `notify-isa` for both routings: 23/23 sent,
+confirmed against 23 individual Make executions (`status: 1, operations: 3`
+each), not just the caller's own success count.
+
+Known gaps, not fixed here: SMS and Slack are unbuilt (no Make connection
+exists for either — `notify-isa`'s `sms_message` field is composed and
+unused); the email step hardcodes the one connected address rather than
+routing by the lead's actual `assigned_agent`, so this breaks silently the
+moment a second agent exists.
+
+---
+
 ## Legacy entries
 
 Everything below predates the structured format above
@@ -254,6 +460,7 @@ as valid credential either way — so `verify_jwt` may not have been the real
 blocker for this particular function to begin with, unlike `assign-leads` and
 `log-touch` where the before/after behavior change was unambiguous.
 
+<a id="entry-legacy-20260921-2016"></a>
 ## 2026-09-21 20:16 UTC — `log-touch` + Make scenario "ISA Notify Receiver" (id `5077766`) — verify_jwt mismatch + redundant touch-logging call — Perplexity Computer
 Two-layered bug. Layer 1: `verify_jwt: true` mismatched against the function's
 own `x-make-secret` auth, same pattern as above — fixed with
