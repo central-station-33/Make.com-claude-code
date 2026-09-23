@@ -1,8 +1,12 @@
-
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
-import { SMSListProps } from "@/types/messaging.types";
+import { SMSTouch } from "@/hooks/messaging/useSMSMessaging";
+
+interface SMSListProps {
+  messages: SMSTouch[];
+  isLoading: boolean;
+}
 
 export const SMSList = ({ messages, isLoading }: SMSListProps) => {
   if (isLoading) {
@@ -18,25 +22,20 @@ export const SMSList = ({ messages, isLoading }: SMSListProps) => {
       <div className="space-y-4">
         {messages.map((message) => (
           <Card key={message.id} className="p-4">
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start gap-3">
               <div>
                 <p className="text-sm">{message.message}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {format(new Date(message.created_at!), 'MMM dd, yyyy HH:mm')}
+                  {format(new Date(message.touched_at), 'MMM dd, yyyy HH:mm')}
+                  {message.isa_name ? ` · ${message.isa_name}` : ''}
                 </p>
               </div>
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                message.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                message.status === 'sent' ? 'bg-blue-100 text-blue-800' :
-                message.status === 'failed' ? 'bg-red-100 text-red-800' :
-                'bg-gray-100 text-gray-800'
+              <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
+                message.status === 'sent' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
               }`}>
                 {message.status}
               </span>
             </div>
-            {message.error_message && (
-              <p className="text-xs text-red-500 mt-2">{message.error_message}</p>
-            )}
           </Card>
         ))}
       </div>

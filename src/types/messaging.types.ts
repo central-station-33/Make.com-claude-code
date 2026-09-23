@@ -47,27 +47,7 @@ export interface LeadMessagingProps {
   leadId: string;
 }
 
-export interface SMSMessage {
-  id: string;
-  lead_id: string;
-  sender_id: string;
-  message: string;
-  status: 'pending' | 'sent' | 'delivered' | 'failed';
-  sent_at?: string;
-  delivered_at?: string;
-  error_message?: string;
-  metadata?: Record<string, any>;
-  created_at?: string;
-  updated_at?: string;
-}
-
-export interface SMSInputProps {
-  onSend: (message: string, phoneNumber: string) => Promise<void>;
-  recipientPhone?: string;
-  disabled?: boolean;
-}
-
-export interface SMSListProps {
-  messages: SMSMessage[];
-  isLoading: boolean;
-}
+// SMS-specific types (SMSTouch, and the SMSInput/SMSList prop shapes) now
+// live next to their hook/components -- src/hooks/messaging/useSMSMessaging.ts
+// and src/components/messaging/SMS*.tsx -- since they're keyed to
+// lead_touches, not a standalone text_messages table.
