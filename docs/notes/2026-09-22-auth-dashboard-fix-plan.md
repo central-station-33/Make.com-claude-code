@@ -18,12 +18,21 @@ user enabled it directly in the Supabase dashboard, self-reported done
 config toggle, so this is taken on the user's word, not confirmed via API)
 are all done. Remaining open items (17-21, database-hygiene, "optional, low
 urgency") were never gated on a user decision and can be picked up anytime.
-One thing predating this update is still genuinely unconfirmed, not just
-unchecked out of habit: Priority 0's own closing step — "ask the user to
-test one real reset-and-login cycle... to confirm the fix before closing
-this item out" — was never explicitly confirmed back in this doc. The root
-cause (autocomplete mismatch) was fixed and built clean, but nobody has
-stated here that a real reset+login cycle was actually tried and worked.
+
+**Priority 0's closing step is now confirmed (2026-09-23):** the user
+completed a real reset-and-login cycle and it worked — see
+`docs/notes/shared-edge-function-changelog.md#entry-20260923-04`. Getting
+there took longer than the original diagnosis implied: the autocomplete
+mismatch this section originally names was a real bug and was fixed, but it
+was not the thing actually blocking the user's testing for most of this
+session. Two infrastructure issues were the real blockers, found and fixed
+mid-session: the Vercel project's Git connection was silently disconnected
+(`entry-20260923-03`), and reset emails were carrying a dead domain,
+`claude-code-inrange.vercel.app`, which isn't registered to this Vercel
+project at all (`entry-20260923-04`). A new, separate, still-open bug was
+also found during this same test — the "Set Password" button not
+responding on a repeat visit to `/auth/reset-password` — logged in
+`entry-20260923-04`, not blocking since login itself is confirmed working.
 
 Evidence backing every item here is in the Perplexity Computer session that
 produced this plan (Supabase `auth_logs`, `get_advisors`, and direct reads of
@@ -206,8 +215,11 @@ attributes.
 
 ## Sign-off checklist for Claude Code
 
-- [ ] Priority 0 shipped and the user has confirmed a clean reset+login
-      cycle works.
+- [x] Priority 0 shipped and the user has confirmed a clean reset+login
+      cycle works — confirmed 2026-09-23 (two `PUT /auth/v1/user` 200s in
+      auth_logs plus a successful subsequent login); see
+      `shared-edge-function-changelog.md#entry-20260923-04` for what it
+      actually took to get there and a new open bug found along the way.
 - [x] Priority 1 items 5, 6, 7, 8 shipped (item 5 confirmed with the user
       first and shipped 2026-09-23, commit `e071af9`; item 7 enabled by the
       user directly in the Supabase dashboard, self-reported 2026-09-23, not

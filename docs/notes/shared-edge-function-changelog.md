@@ -81,6 +81,53 @@ Field notes:
 
 ---
 
+<a id="entry-20260923-04"></a>
+## [2026-09-23T21:30Z] code-only:auth-reset-flow — Priority 0 reset+login cycle confirmed; new domain finding; new open bug
+agent: claude-code
+entry-id: 20260923-04
+target-type: code-only
+target-id: src/components/auth/ResetPasswordForm.tsx, src/pages/Settings.tsx
+window-check: yes
+verify_jwt-before: n/a
+verify_jwt-after: n/a
+artifact: two `PUT /auth/v1/user` 200 responses in auth_logs
+  (2026-09-23T21:11:13Z, 2026-09-23T21:29:57Z) plus the user's confirmation
+  that logging in with the resulting password worked
+commit: n/a — findings only, no code change in this entry
+status: done
+related-entries: entry-20260923-03
+
+Closes fix-plan Priority 0's outstanding closing step (see this doc's
+sign-off checklist and top-of-doc status note): the user completed a real
+password-reset + login cycle end-to-end and it worked. Two things surfaced
+during this test worth recording:
+
+1. **A second, distinct root cause behind the recurring 404s**, beyond the
+   Vercel Git-connection outage in entry-20260923-03:
+   `claude-code-inrange.vercel.app`, the domain several reset emails
+   redirected to, is not registered to this Vercel project at all
+   (confirmed via `list_project_domains` — the project's only domain is
+   `inrange.jetreadvisors.com`; the auto-generated fallback would be an
+   `inrange-frontend-*.vercel.app` URL, not this). It 404s unconditionally,
+   on any path. Most likely explanation: it was Supabase's Site URL at some
+   earlier point (before the user corrected it to
+   `https://inrange.jetreadvisors.com/`), baked permanently into any
+   recovery email sent before that correction — those old links can't be
+   fixed retroactively. A fresh `/recover` call placed during this session
+   (2026-09-23T21:01:05Z, correct referer and `redirect_to`) is what
+   finally led to the two successful `PUT /auth/v1/user` calls above.
+2. **New, unresolved bug**: on a repeat visit to `/auth/reset-password`
+   after a successful submission, the "Set Password" button stopped
+   responding to clicks — no `/auth/v1/user` request reached Supabase at
+   all. Ruled out: validation (user confirmed both password fields matched
+   and all 5 requirement checks were green), and React/autofill state
+   desync (button still didn't respond after manually deleting and
+   retyping both fields by hand). Not diagnosed further — needs browser
+   console output from the affected session, which wasn't available. Does
+   not block Priority 0 (login already confirmed working with a password
+   set via an earlier, successful submission on the same page), but is a
+   real defect someone should reproduce with devtools open.
+
 <a id="entry-20260923-03"></a>
 ## [2026-09-23T18:55Z] other:vercel-deploy — GitHub-Vercel Git connection was disconnected, reconnected
 agent: claude-code
