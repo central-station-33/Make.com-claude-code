@@ -94,7 +94,7 @@ artifact: deployment dpl_5dNv19EKaYXzvWCFzFtdP3QBrLZr (created 2026-09-22,
   before this fix) vs. the deployment this commit's push should trigger —
   compare `githubCommitSha` on each via `list_deployments`/`get_deployment`
 commit: <this commit, see git log>
-status: done
+status: in-progress
 related-entries: entry-legacy-20260921-2215
 
 Not an edge function or Make scenario, but a real production incident
@@ -114,11 +114,22 @@ successful in the dashboard without being new).
 
 User reconnected GitHub → `central-station-33/inrange-frontend` in the
 Vercel dashboard. Reconnecting alone doesn't retroactively deploy anything
-already merged — it only re-arms the webhook for future pushes — so this
-commit (and its push) is what actually tests and triggers the fix. Verify
-after: the next `list_deployments` call for this project should show a new
-`production` deployment with `githubCommitRef: "main"` and a commit SHA
-from today's session, not `89e2ba7`.
+already merged — it only re-arms the webhook for future pushes.
+
+Took two attempts: the first "Connected it" report turned out to be the
+Vercel *account's* GitHub sign-in method (Settings → Authentication —
+already connected, unrelated to deployments), not the *project's* Connected
+Git Repository (Settings → Git, under this project specifically) — easy to
+conflate since both show a GitHub icon. A push made between the two
+attempts (commit `d8a5283`) triggered nothing, confirming the first
+attempt hadn't actually linked the project. The project's `updatedAt`
+timestamp changed only after the second attempt, which is what this
+commit's push is testing. Verify after: the next `list_deployments` call
+for this project should show a new `production` deployment with
+`githubCommitRef: "main"` and a commit SHA from today's session, not
+`89e2ba7`. If it still doesn't fire, the next thing to check is whether
+the Vercel GitHub App itself has been granted access to this specific repo
+in GitHub's own Settings → Integrations, not just Vercel's side.
 
 <a id="entry-20260923-02"></a>
 ## [2026-09-23T16:50Z] other:auth-config — leaked-password protection enabled, closing fix-plan item 7
