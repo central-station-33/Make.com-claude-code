@@ -81,6 +81,31 @@ Field notes:
 
 ---
 
+<a id="entry-20260923-02"></a>
+## [2026-09-23T16:50Z] other:auth-config — leaked-password protection enabled, closing fix-plan item 7
+agent: claude-code
+entry-id: 20260923-02
+target-type: other
+target-id: auth-config
+window-check: n/a
+verify_jwt-before: n/a
+verify_jwt-after: n/a
+artifact: n/a — self-reported by the user, not independently verified; no
+  available tool exposes Supabase Auth config (Authentication → Providers →
+  Email → "Prevent use of leaked passwords") to confirm it programmatically
+commit: n/a
+status: done
+related-entries: entry-legacy-20260923-0305
+
+Not a code or deploy change — logged here anyway since this file is the
+cross-agent coordination point and the setting lives on the same Supabase
+project. Closes `docs/notes/2026-09-22-auth-dashboard-fix-plan.md` item 7:
+the user enabled "Prevent use of leaked passwords" (checks new passwords
+against HaveIBeenPwned) directly in the dashboard. Worth a correction for
+whoever reads this next: the fix-plan doc originally pointed at
+Authentication → Policies for this — that's wrong, Policies is Postgres
+RLS, not Auth. The real location is Authentication → Providers → Email.
+
 <a id="entry-20260923-01"></a>
 ## [2026-09-23T15:40Z] code-only:send-auth-email — deleted dead edge function, completing item 12
 agent: claude-code

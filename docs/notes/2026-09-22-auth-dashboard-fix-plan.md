@@ -1,24 +1,29 @@
 # InRange auth/dashboard fix plan — 2026-09-22
 
-**Status: NEARLY COMPLETE — only item 7 remains.** Written by Perplexity
-Computer after a full audit of the live login flow, the `inrange-frontend`
-repo, and the Supabase project (`omzugrtgwsjypekuzgtn`). The user approved
-executing this plan. Priority 0 (root cause), Priority 1 items 6/8 (and 9
-attempted — see the entry at
+**Status: ALL ITEMS REQUIRING A USER DECISION ARE CLOSED (2026-09-23).**
+Written by Perplexity Computer after a full audit of the live login flow,
+the `inrange-frontend` repo, and the Supabase project
+(`omzugrtgwsjypekuzgtn`). The user approved executing this plan. Priority 0
+(root cause), Priority 1 items 6/8 (and 9 attempted — see the entry at
 `docs/notes/shared-edge-function-changelog.md#entry-legacy-20260923-0305`
 for why it couldn't be applied), Priority 2 (dead code, with one correction
 to this doc's own item 10 — see that changelog entry), and Priority 4 items
 15/16 were done as of that entry. Since then, with the user deciding each
 one directly: item 5 (self-signup removal, commit `e071af9`), item 13
 (duplicate login page — kept `Index.tsx` at `/`, `/auth` now redirects,
-commit `cb43ac3`), and item 14 (logo asset — user supplied a corrected
-file, swapped in commit `80230f1`) are all done. **Only item 7 remains**
-(enabling leaked-password protection) — a Supabase Auth dashboard toggle
-that can't be flipped from this repo; the user confirmed they want it
-enabled but still needs to do it manually at
-https://supabase.com/dashboard/project/omzugrtgwsjypekuzgtn/auth/policies.
-Claude Code: once the user confirms that toggle is on, mark item 7 done
-below and this plan is fully closed out.
+commit `cb43ac3`), item 14 (logo asset — user supplied a corrected file,
+swapped in commit `80230f1`), and item 7 (leaked-password protection — the
+user enabled it directly in the Supabase dashboard, self-reported done
+2026-09-23; Claude Code has no tool access to independently verify an Auth
+config toggle, so this is taken on the user's word, not confirmed via API)
+are all done. Remaining open items (17-21, database-hygiene, "optional, low
+urgency") were never gated on a user decision and can be picked up anytime.
+One thing predating this update is still genuinely unconfirmed, not just
+unchecked out of habit: Priority 0's own closing step — "ask the user to
+test one real reset-and-login cycle... to confirm the fix before closing
+this item out" — was never explicitly confirmed back in this doc. The root
+cause (autocomplete mismatch) was fixed and built clean, but nobody has
+stated here that a real reset+login cycle was actually tried and worked.
 
 Evidence backing every item here is in the Perplexity Computer session that
 produced this plan (Supabase `auth_logs`, `get_advisors`, and direct reads of
@@ -78,10 +83,14 @@ attributes.
    and the same for `current_team_agent_id()`, unless something in the app
    genuinely needs anonymous access (audit callers first — grep the repo for
    both function names before revoking).
-7. **Enable leaked-password protection** in Supabase Auth settings
-   (Authentication → Policies → "Leaked password protection") — checks new
-   passwords against HaveIBeenPwned. No code change, just a project setting;
-   flag it to the user since it's a dashboard toggle, not something Claude
+7. **DONE (2026-09-23, self-reported by the user — not independently
+   verified; no available tool exposes Supabase Auth config to check it).**
+   **Enable leaked-password protection** in Supabase Auth settings
+   (Authentication → Providers → Email → "Prevent use of leaked
+   passwords" — note: not under "Policies", which is Postgres RLS, not
+   Auth) — checks new passwords against HaveIBeenPwned. No code change,
+   just a project setting; flag it to the user since it's a dashboard
+   toggle, not something Claude
    Code can do from this repo.
 8. **Function search_path.** `public.increment_ai_budget_spend` has a
    mutable search_path (Supabase security advisor `WARN`). Add `SET
@@ -199,13 +208,15 @@ attributes.
 
 - [ ] Priority 0 shipped and the user has confirmed a clean reset+login
       cycle works.
-- [x] Priority 1 items 5, 6, 8 shipped (item 5 confirmed with the user first
-      and shipped 2026-09-23, commit `e071af9`); item 9 attempted, not
-      applicable (see changelog); item 7 still needs the user (it's a
-      dashboard toggle Claude Code can't make directly).
-- [ ] Priority 2 dead files removed, `git log` shows one clean commit per
-      logical group (don't squash unrelated cleanup into the Priority 0 fix
-      commit).
+- [x] Priority 1 items 5, 6, 7, 8 shipped (item 5 confirmed with the user
+      first and shipped 2026-09-23, commit `e071af9`; item 7 enabled by the
+      user directly in the Supabase dashboard, self-reported 2026-09-23, not
+      independently verified); item 9 attempted, not applicable (see
+      changelog).
+- [x] Priority 2 dead files removed — re-verified independently this
+      session (grep confirmed all 8 listed files gone; both files named as
+      "actually live" in the 03:05 UTC legacy entry's correction are still
+      present and imported), commit `2731463`.
 - [x] Priority 3 decision made with the user (option (a) — single login
       page at `/`, `/auth` redirects), shipped 2026-09-23, commit `cb43ac3`.
 - [x] Priority 4 items 14, 15, 16 shipped. Item 14 was flagged back to the
