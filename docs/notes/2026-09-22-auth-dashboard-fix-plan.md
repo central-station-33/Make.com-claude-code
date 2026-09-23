@@ -1,23 +1,24 @@
 # InRange auth/dashboard fix plan — 2026-09-22
 
-**Status: EXECUTION APPROVED, IN PROGRESS.** Written by Perplexity Computer
-after a full audit of the live login flow, the `inrange-frontend` repo, and
-the Supabase project (`omzugrtgwsjypekuzgtn`). The user has approved
+**Status: NEARLY COMPLETE — only item 7 remains.** Written by Perplexity
+Computer after a full audit of the live login flow, the `inrange-frontend`
+repo, and the Supabase project (`omzugrtgwsjypekuzgtn`). The user approved
 executing this plan. Priority 0 (root cause), Priority 1 items 6/8 (and 9
 attempted — see the entry at
 `docs/notes/shared-edge-function-changelog.md#entry-legacy-20260923-0305`
-for why it couldn't be applied), Priority 2 (dead code, with one correction to this doc's own item
-10 — see that changelog entry), and Priority 4 items 15/16 are done as of
-that entry. Item 5 (self-signup removal) is now also done — the user
-confirmed removal on 2026-09-23; see commit `e071af9` on `main` (SignInForm's
-signup branch removed, plus the now-fully-orphaned signup plumbing across
-useAuthActions/AuthContext/AuthFormContext deleted rather than left dead).
-Still open and requiring a direct answer from the user before anyone
-touches them: item 7 (dashboard toggle), item 13 (duplicate-page decision),
-item 14 (logo asset). Claude Code: re-read the changelog entry above before
-picking up any remaining item — don't re-do what's already shipped, and
-don't touch 7/13/14 without the user's explicit answer landing in that same
-changelog first.
+for why it couldn't be applied), Priority 2 (dead code, with one correction
+to this doc's own item 10 — see that changelog entry), and Priority 4 items
+15/16 were done as of that entry. Since then, with the user deciding each
+one directly: item 5 (self-signup removal, commit `e071af9`), item 13
+(duplicate login page — kept `Index.tsx` at `/`, `/auth` now redirects,
+commit `cb43ac3`), and item 14 (logo asset — user supplied a corrected
+file, swapped in commit `80230f1`) are all done. **Only item 7 remains**
+(enabling leaked-password protection) — a Supabase Auth dashboard toggle
+that can't be flipped from this repo; the user confirmed they want it
+enabled but still needs to do it manually at
+https://supabase.com/dashboard/project/omzugrtgwsjypekuzgtn/auth/policies.
+Claude Code: once the user confirms that toggle is on, mark item 7 done
+below and this plan is fully closed out.
 
 Evidence backing every item here is in the Perplexity Computer session that
 produced this plan (Supabase `auth_logs`, `get_advisors`, and direct reads of
@@ -145,9 +146,10 @@ attributes.
 
 ## Priority 4 — Visual bugs on the login page
 
-14. **Logo asset is broken.** The file at
-    `public/uploads/9426cd2c-3e5d-46c0-8df6-12e24c277730.png` (referenced
-    from both `Index.tsx` and `AuthPage.tsx`) contains two overlapping/
+14. **DONE (2026-09-23, commit `80230f1`).** **Logo asset is broken.** The
+    file at `public/uploads/9426cd2c-3e5d-46c0-8df6-12e24c277730.png`
+    (referenced from `Index.tsx`; `AuthPage.tsx`'s reference was removed
+    along with the rest of that file in item 13) contains two overlapping/
     double-exposed copies of the mark, and the tagline text baked into the
     image reads "JET REALTY ADVIRSORS" (misspelled, should be "ADVISORS").
     This needs a corrected source file from the user/design side — Claude
@@ -206,8 +208,10 @@ attributes.
       commit).
 - [x] Priority 3 decision made with the user (option (a) — single login
       page at `/`, `/auth` redirects), shipped 2026-09-23, commit `cb43ac3`.
-- [ ] Priority 4 item 15 and 16 shipped; item 14 flagged back rather than
-      guessed at.
+- [x] Priority 4 items 14, 15, 16 shipped. Item 14 was flagged back to the
+      user rather than guessed at, per this checklist's original wording —
+      the user supplied a corrected file 2026-09-23, swapped in commit
+      `80230f1`.
 - [ ] Any Supabase migration or edge-function redeploy logged in
       `docs/notes/shared-edge-function-changelog.md` per that file's own
       rule.
