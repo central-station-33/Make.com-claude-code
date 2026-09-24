@@ -6,7 +6,9 @@ import {
   SalesLead, SalesSegment, SalesStage, LeadRole,
   SALES_STAGE_ORDER, SALES_STAGE_LABELS, SALES_STAGE_COLORS,
 } from '@/types/salesPipeline';
-import { Loader2, Users, Building2, AlertTriangle, Search, TrendingUp, ArrowLeft } from 'lucide-react';
+import { Loader2, Users, Building2, AlertTriangle, Search, TrendingUp, ArrowLeft, MessageSquare } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { SMSMessaging } from '@/components/messaging/SMSMessaging';
 
 type StageFilter = 'all' | SalesStage;
 
@@ -51,6 +53,8 @@ export default function SalesFunnel() {
   const [segment, setSegmentState] = useState<SalesSegment>(segmentParam ?? 'homeowner');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [search, setSearch] = useState('');
+  const [smsLeadId, setSmsLeadId] = useState<string | null>(null);
+  const [smsLeadName, setSmsLeadName] = useState<string | null>(null);
 
   const setSegment = (next: SalesSegment) => {
     setSegmentState(next);
@@ -295,6 +299,19 @@ export default function SalesFunnel() {
                     leadId={lead.isa_lead_id}
                     onUpdate={(id, s) => updateStage.mutate({ leadId: id, stage: s })}
                   />
+                  {lead.phone && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSmsLeadId(lead.isa_lead_id);
+                        setSmsLeadName(lead.full_name ?? null);
+                      }}
+                      className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-700"
+                    >
+                      <MessageSquare className="h-3 w-3" />
+                      SMS
+                    </button>
+                  )}
                   <span className="text-[10px] text-gray-400 ml-auto">
                     {new Date(lead.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
                   </span>
@@ -306,6 +323,15 @@ export default function SalesFunnel() {
 
         <div className="h-8" />
       </div>
+
+      <Dialog open={!!smsLeadId} onOpenChange={(open) => { if (!open) { setSmsLeadId(null); setSmsLeadName(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{smsLeadName ?? 'Lead'}</DialogTitle>
+          </DialogHeader>
+          {smsLeadId && <SMSMessaging leadId={smsLeadId} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
