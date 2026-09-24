@@ -26,6 +26,46 @@ them.
 Append newest entries at the top, immediately below this section, above the
 "Legacy entries" divider.
 
+<a id="entry-20260923-10"></a>
+## [2026-09-24 00:03 UTC] edge-function:send-sms — fixed Twilio secret name, verified live send — perplexity-computer
+agent: perplexity-computer
+entry-id: 20260923-10
+target-type: edge-function
+target-id: send-sms
+window-check: yes
+verify_jwt-before: true
+verify_jwt-after: true
+artifact: supabase-version:2
+commit: 2fe1cd8
+status: done
+related-entries: entry-20260923-09
+
+Follow-up to entry-20260923-09. The user set Twilio secrets in the
+Supabase Dashboard, but the actual secret name is `TWILIO_FROM_NUMBER`,
+not `TWILIO_PHONE_NUMBER` as the rebuilt function assumed (confirmed by
+a photo of the Dashboard's secrets list -- `TWILIO_ACCOUNT_SID` and
+`TWILIO_AUTH_TOKEN` matched correctly). Changed the one `Deno.env.get(...)`
+call in `send-sms/index.ts` to read `TWILIO_FROM_NUMBER`; redeployed as
+version 2.
+
+Verified with a real Twilio send: used a narrow, secret-header-guarded
+diagnostic function (`send-sms-diag`) that does nothing but place one
+Twilio API call with the project's own secrets -- no database access, no
+user-session minting. First run (old secret name) correctly failed at the
+secrets check; after the fix, a second run succeeded
+(SID `SMdf367920ee5dd2f9d9025f9d761fad1c`, status `queued`) to a number the
+user provided for this test. The diagnostic function was deployed, used
+once, and overwritten with a disabled 410 stub immediately after each run
+-- it is not left active. A related diagnostic that would have minted a
+real broker session was stopped by a safety check before it could be used
+and was disabled without ever running; see the session's own report for
+detail, not repeated here.
+
+Still open (unchanged from entry-20260923-09): `sms_consent` is NULL on
+all 186 existing `isa_leads` rows, so no real lead can be texted yet
+through the actual function until a consent-capture step exists or the
+user decides otherwise; and no UI entry point renders `SMSMessaging` yet.
+
 <a id="entry-20260923-09"></a>
 ## [2026-09-23 23:39 UTC] edge-function:send-sms — rebuilt from scratch against isa_leads + lead_touches — perplexity-computer
 agent: perplexity-computer
