@@ -125,7 +125,9 @@ serve(async (req) => {
 
   const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
   const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
-  const twilioPhoneNumber = Deno.env.get('TWILIO_PHONE_NUMBER');
+  // Named TWILIO_FROM_NUMBER in this project's Supabase secrets (confirmed
+  // 2026-09-23 by checking the Dashboard directly), not TWILIO_PHONE_NUMBER.
+  const twilioPhoneNumber = Deno.env.get('TWILIO_FROM_NUMBER');
 
   if (!twilioAccountSid || !twilioAuthToken || !twilioPhoneNumber) {
     return err('SMS is not configured yet -- Twilio secrets are missing on this project', 500);
