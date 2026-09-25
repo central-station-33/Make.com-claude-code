@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { ProfileLoadingState } from '@/components/profile/ProfileLoadingState';
 import { useProfileData } from '@/hooks/profile/useProfileData';
+import MyBackupEmail from '@/components/profile/MyBackupEmail';
 
 const ProfilePage = () => {
   const { toast } = useToast();
@@ -95,6 +96,8 @@ const ProfilePage = () => {
               }
             }}
           />
+
+          <MyBackupEmail />
 
           <div className="pt-6 border-t">
             <Button 

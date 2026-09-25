@@ -5,14 +5,16 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mail } from 'lucide-react';
 
 interface Props {
-  teamAgentId: string;
+  /** Omit to add a backup to the signed-in user's own profile. */
+  teamAgentId?: string;
   mainEmail: string;
   backupEmail: string | null;
   onChanged?: () => void;
 }
 
 /**
- * Broker-only control: invite ONE backup login email for an agent.
+ * Invite ONE backup login email for an agent (brokers: any agent; agents:
+ * their own profile, from Profile).
  * The backup login signs in to the same profile with the same access
  * (see invite-agent `mode: 'backup'` and team_agent_logins).
  */
@@ -26,7 +28,7 @@ export default function BackupEmailControl({ teamAgentId, mainEmail, backupEmail
       const clean = email.trim().toLowerCase();
       if (clean === mainEmail.toLowerCase()) throw new Error('Backup email must be different from the main email.');
       const { data, error } = await inrange.functions.invoke('invite-agent', {
-        body: { mode: 'backup', email: clean, team_agent_id: teamAgentId },
+        body: { mode: 'backup', email: clean, ...(teamAgentId ? { team_agent_id: teamAgentId } : {}) },
       });
       if (error) throw error;
       if (data && data.success === false) throw new Error(data.error || 'Invite failed');

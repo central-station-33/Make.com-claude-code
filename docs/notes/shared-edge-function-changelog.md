@@ -21,6 +21,11 @@ migration filenames is self-attested. The structure exists to make
 inaccurate or skipped entries cheap to spot after the fact, not to prevent
 them.
 
+## 20260925-05 — Agents add their own backup email
+
+- **invite-agent v17** (verify_jwt=true): `mode: 'backup'` now allowed for any ACTIVE agent signed in with their MAIN login, for their own profile only (`team_agent_id` optional, defaults to caller). Brokers can still add for any agent. A backup login is refused ("sign in with your main email"). Normal agent invites remain broker-only. Deployed source matches repo byte-for-byte; no-auth call returns 401.
+- **Frontend**: Profile page gets a "Backup login email" section (`src/components/profile/MyBackupEmail.tsx`); `BackupEmailControl` `teamAgentId` optional. Brokers still see each agent's backup on the Team page.
+
 ## 20260925-04 — Backup login email per agent
 
 - **DB migration `20260925150000_team_agent_backup_logins`** (prod): new `team_agent_logins` (one active backup per agent; guard blocks a primary login from also being a backup; RLS: own row read, brokers manage). `team_agents.backup_email` display column. `current_team_agent_id()` now resolves primary OR active backup login; `is_broker()` and `can_access_brand()` use it. Policies `agents view own team_agents row`, `brands read`, `brand members read` switched from `auth_user_id = auth.uid()` to the resolver. Undo script: `supabase/migrations/rollback_20260925150000_team_agent_backup_logins.sql.txt`.

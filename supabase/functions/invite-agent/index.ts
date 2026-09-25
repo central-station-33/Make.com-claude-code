@@ -17,6 +17,9 @@
  * sends the invite to a second email and links it to an EXISTING team_agents
  * profile via team_agent_logins (same profile, same permissions). No new
  * team_agents row is created. One active backup per agent.
+ * Brokers can add a backup for any agent. An active agent signed in with
+ * their MAIN login can add their own (team_agent_id optional / must be theirs).
+ * A backup login can never add or change backups.
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
@@ -44,9 +47,10 @@ serve(async (req) => {
   if (callerErr || !callerData?.user) return json({ success: false, error: 'Invalid session' }, 401);
 
   // Resolve caller by primary login, then by active backup login.
+  let callerIsBackup = false;
   let { data: callerAgent, error: agentErr } = await supabase
     .from('team_agents')
-    .select('id, role')
+    .select('id, role, status')
     .eq('auth_user_id', callerData.user.id)
     .maybeSingle();
   if (!agentErr && !callerAgent) {
@@ -57,21 +61,32 @@ serve(async (req) => {
       .eq('status', 'active')
       .maybeSingle();
     if (link?.team_agent_id) {
-      const res = await supabase.from('team_agents').select('id, role').eq('id', link.team_agent_id).maybeSingle();
-      callerAgent = res.data; agentErr = res.error;
+      const res = await supabase.from('team_agents').select('id, role, status').eq('id', link.team_agent_id).maybeSingle();
+      callerAgent = res.data; agentErr = res.error; callerIsBackup = true;
     }
   }
 
   if (agentErr) return json({ success: false, error: agentErr.message }, 500);
-  if (!callerAgent || callerAgent.role !== 'broker') {
-    return json({ success: false, error: 'Only a broker can invite agents' }, 403);
-  }
 
   const body = await req.json().catch(() => ({})) as Record<string, unknown>;
   const email = String(body.email ?? '').trim().toLowerCase();
 
   if (body.mode === 'backup') {
-    return await inviteBackupLogin(supabase, email, String(body.team_agent_id ?? ''), callerData.user);
+    if (!callerAgent || callerAgent.status !== 'active') {
+      return json({ success: false, error: 'Only active team members can add a backup email' }, 403);
+    }
+    if (callerIsBackup) {
+      return json({ success: false, error: 'Sign in with your main email to add or change a backup email' }, 403);
+    }
+    const targetId = String(body.team_agent_id ?? '') || callerAgent.id;
+    if (callerAgent.role !== 'broker' && targetId !== callerAgent.id) {
+      return json({ success: false, error: 'You can only add a backup email to your own profile' }, 403);
+    }
+    return await inviteBackupLogin(supabase, email, targetId, callerData.user);
+  }
+
+  if (!callerAgent || callerAgent.role !== 'broker') {
+    return json({ success: false, error: 'Only a broker can invite agents' }, 403);
   }
   const fullName = String(body.full_name ?? '').trim();
   const market = body.market;
