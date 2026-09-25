@@ -9,6 +9,8 @@ import {
 import { Loader2, Users, Building2, AlertTriangle, Search, TrendingUp, ArrowLeft, MessageSquare } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SMSMessaging } from '@/components/messaging/SMSMessaging';
+import { useBrand } from '@/contexts/BrandContext';
+import { withBrand } from '@/lib/brandFilter';
 
 type StageFilter = 'all' | SalesStage;
 
@@ -45,6 +47,7 @@ function StageBadge({
 }
 
 export default function SalesFunnel() {
+  const { activeBrandId } = useBrand();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -67,13 +70,13 @@ export default function SalesFunnel() {
   };
 
   const residential = useQuery({
-    queryKey: ['sales-leads', 'residential'],
+    queryKey: ['sales-leads', 'residential', activeBrandId],
     queryFn: async () => {
-      const { data, error } = await inrange
+      const { data, error } = await withBrand(inrange
         .from('residential_sale_pipeline')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(300);
+        .limit(300), activeBrandId);
       if (error) throw error;
       return (data ?? []) as unknown as SalesLead[];
     },
@@ -81,13 +84,13 @@ export default function SalesFunnel() {
   });
 
   const investor = useQuery({
-    queryKey: ['sales-leads', 'investor'],
+    queryKey: ['sales-leads', 'investor', activeBrandId],
     queryFn: async () => {
-      const { data, error } = await inrange
+      const { data, error } = await withBrand(inrange
         .from('distressed_investor_pipeline')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(300);
+        .limit(300), activeBrandId);
       if (error) throw error;
       return (data ?? []) as unknown as SalesLead[];
     },
@@ -107,7 +110,7 @@ export default function SalesFunnel() {
       if (error) throw error;
     },
     onMutate: async ({ leadId, stage }) => {
-      const key = ['sales-leads', segment === 'homeowner' ? 'residential' : 'investor'];
+      const key = ['sales-leads', segment === 'homeowner' ? 'residential' : 'investor', activeBrandId];
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<SalesLead[]>(key);
       queryClient.setQueryData<SalesLead[]>(key, (old) =>

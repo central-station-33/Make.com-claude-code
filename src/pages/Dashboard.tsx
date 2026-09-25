@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { inrange } from '@/integrations/supabase/inrange';
 import { useCurrentTeamAgent } from '@/hooks/useCurrentTeamAgent';
 import { Loader2, MapPin, ChevronRight, AlertTriangle, TrendingUp, Building2, Clock, Sparkles } from 'lucide-react';
+import { useBrand } from '@/contexts/BrandContext';
+import { withBrand } from '@/lib/brandFilter';
 
 type TierCount = { tier: string; count: number };
 type StateCount = { state: string; count: number };
@@ -30,14 +32,15 @@ type BulkEnrichResult = { success: boolean; enriched?: number; failed?: number; 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { isBroker } = useCurrentTeamAgent();
+  const { activeBrandId } = useBrand();
   const [enrichMsg, setEnrichMsg] = useState<string | null>(null);
 
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
+    queryKey: ['dashboard-stats', activeBrandId],
     queryFn: async () => {
-      const { data, error } = await inrange
+      const { data, error } = await withBrand(inrange
         .from('properties')
-        .select('priority_tier, enrichment_status, composite_score, state');
+        .select('priority_tier, enrichment_status, composite_score, state'), activeBrandId);
       if (error) throw error;
 
       const rows = data ?? [];
@@ -72,15 +75,15 @@ export default function DashboardPage() {
   });
 
   const { data: tier1Leads = [], isLoading: leadsLoading } = useQuery({
-    queryKey: ['dashboard-tier1'],
+    queryKey: ['dashboard-tier1', activeBrandId],
     queryFn: async () => {
-      const { data, error } = await inrange
+      const { data, error } = await withBrand(inrange
         .from('properties')
         .select('id, address, city, state, composite_score, deal_type, distress_indicators')
         .eq('priority_tier', 'Tier 1')
         .eq('enrichment_status', 'complete')
         .order('composite_score', { ascending: false })
-        .limit(5);
+        .limit(5), activeBrandId);
       if (error) throw error;
       return data ?? [];
     },

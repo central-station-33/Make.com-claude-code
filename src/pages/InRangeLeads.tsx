@@ -6,6 +6,8 @@ import { InRangeLeadSummary, PriorityTier, LeadStatus, LEAD_STATUS_LABELS, LEAD_
 import { useCurrentTeamAgent } from '@/hooks/useCurrentTeamAgent';
 import AgentAssignSelect from '@/components/inrange/AgentAssignSelect';
 import { Loader2, MapPin, AlertTriangle, Search, ChevronRight, User, ArrowLeft, Sparkles } from 'lucide-react';
+import { useBrand } from '@/contexts/BrandContext';
+import { withBrand } from '@/lib/brandFilter';
 
 type TierFilter = 'all' | PriorityTier;
 type StatusFilter = 'all' | LeadStatus;
@@ -81,6 +83,7 @@ export default function InRangeLeads() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { isBroker } = useCurrentTeamAgent();
+  const { activeBrandId } = useBrand();
   const [searchParams, setSearchParams] = useSearchParams();
   const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [bulkEnrichMsg, setBulkEnrichMsg] = useState<string | null>(null);
@@ -115,7 +118,7 @@ export default function InRangeLeads() {
   };
 
   const { data: leads = [], isLoading, error, refetch } = useQuery({
-    queryKey: ['inrange-leads', tierFilter, stateFilter],
+    queryKey: ['inrange-leads', tierFilter, stateFilter, activeBrandId],
     queryFn: async () => {
       let q = inrange
         .from('properties')
@@ -126,7 +129,7 @@ export default function InRangeLeads() {
       if (tierFilter !== 'all') q = q.eq('priority_tier', tierFilter);
       if (stateFilter !== 'all') q = q.eq('state', stateFilter);
 
-      const { data, error } = await q;
+      const { data, error } = await withBrand(q, activeBrandId);
       if (error) throw error;
       return (data ?? []) as ExtendedLead[];
     },
@@ -142,7 +145,7 @@ export default function InRangeLeads() {
       if (error) throw error;
     },
     onMutate: async ({ id, agentId }) => {
-      const key = ['inrange-leads', tierFilter, stateFilter];
+      const key = ['inrange-leads', tierFilter, stateFilter, activeBrandId];
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<ExtendedLead[]>(key);
       queryClient.setQueryData<ExtendedLead[]>(key, (old) =>
@@ -151,7 +154,7 @@ export default function InRangeLeads() {
       return { prev };
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['inrange-leads', tierFilter, stateFilter], ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(['inrange-leads', tierFilter, stateFilter, activeBrandId], ctx.prev);
     },
   });
 
@@ -188,7 +191,7 @@ export default function InRangeLeads() {
       if (error) throw error;
     },
     onMutate: async ({ id, status }) => {
-      const key = ['inrange-leads', tierFilter, stateFilter];
+      const key = ['inrange-leads', tierFilter, stateFilter, activeBrandId];
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<ExtendedLead[]>(key);
       queryClient.setQueryData<ExtendedLead[]>(key, (old) =>
@@ -197,7 +200,7 @@ export default function InRangeLeads() {
       return { prev };
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['inrange-leads', tierFilter, stateFilter], ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(['inrange-leads', tierFilter, stateFilter, activeBrandId], ctx.prev);
     },
   });
 

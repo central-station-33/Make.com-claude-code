@@ -26,6 +26,46 @@ them.
 Append newest entries at the top, immediately below this section, above the
 "Legacy entries" divider.
 
+<a id="entry-20260925-01"></a>
+## [2026-09-25 11:40 UTC] database+frontend:brand-profiles — brand profiles, brand tagging, brand switcher — perplexity-computer
+agent: perplexity-computer
+entry-id: 20260925-01
+target-type: migration
+target-id: 20260925120000_brand_profiles.sql (applied to prod as brand_profiles_part1 + brand_profiles_part2)
+window-check: yes
+artifact: supabase-migration:brand_profiles_part1, brand_profiles_part2
+commit: (this commit)
+status: done
+related-entries: entry-20260924-11
+
+User-approved scope: brand profiles + brand switcher only. One shared lead
+engine; each brokerage is a brand. New tables `brands` (seeded: jra = Jet
+Realty Advisors / NJ; hlr = MVP Team @ Highline Residential / NY) and
+`brand_members` (team_agent x brand x license state; seeded James Thompson:
+hlr/NY, jra/NJ). `brand_id` (NOT NULL, default `default_brand_id()` = jra)
+added to isa_leads, properties, rental_units, exclusive_properties — added
+with a constant default so existing rows were not UPDATEd. Solace (exclusive
+property, 183 units, and any linked leads) -> hlr; everything else -> jra.
+Trigger `sync_brand_from_exclusive` forces records with an
+exclusive_property_id to carry that property's brand. RLS: brands visible to
+brokers + member agents, writable by brokers only; anon denied. Pipeline
+views (rental/landlord/residential_sale/distressed_investor/exclusive_leasing)
+now expose brand_id (appended column; security_invoker kept).
+
+NOT in scope / unchanged: row access on leads is NOT yet enforced by brand
+(the switcher is a UI filter); Edge Functions still use hardcoded signatures
+(follow-up-cadence v39: JRA / Solace) — brand-aware signatures are the next
+step. Sharon Nickey (NY hlr + NJ jra) has no team_agents row yet, so no
+brand_members rows for her. Re-tagging existing NY leads to hlr: pending.
+
+Edge Functions that insert leads get jra by default — Make/functions that
+should create Highline leads must pass brand_id (or exclusive_property_id).
+
+Verified in prod (rolled-back test block): broker sees 2 brands / 199 leads;
+James Thompson agent sees 2 brands, 37 leads, cannot edit brands; anon denied
+on brands and brand_members; RLS on. Counts: jra 199 leads / 924 properties /
+13 units; hlr 183 units / 1 exclusive property.
+
 <a id="entry-20260924-12"></a>
 ## [2026-09-25 00:40 UTC] edge-function:follow-up-cadence — SMS consent gate + JRA/Solace branding — perplexity-computer
 agent: perplexity-computer

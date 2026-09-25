@@ -6,6 +6,8 @@ import {
   LandlordLeadSummary, LandlordPipelineStage, LANDLORD_STAGE_LABELS, LANDLORD_STAGE_COLORS,
 } from '@/types/leasing';
 import { Loader2, Building2, AlertTriangle, Search, ChevronRight, Calendar, DollarSign, ArrowLeft } from 'lucide-react';
+import { useBrand } from '@/contexts/BrandContext';
+import { withBrand } from '@/lib/brandFilter';
 
 type StageFilter = 'all' | LandlordPipelineStage;
 
@@ -39,6 +41,7 @@ function StageBadge({
 }
 
 export default function LandlordLeads() {
+  const { activeBrandId } = useBrand();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -57,13 +60,13 @@ export default function LandlordLeads() {
   };
 
   const { data: leads = [], isLoading, error, refetch } = useQuery({
-    queryKey: ['landlord-leads'],
+    queryKey: ['landlord-leads', activeBrandId],
     queryFn: async () => {
-      const { data, error } = await inrange
+      const { data, error } = await withBrand(inrange
         .from('landlord_leasing_pipeline')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(200), activeBrandId);
       if (error) throw error;
       return (data ?? []) as unknown as LandlordLeadSummary[];
     },
@@ -79,7 +82,7 @@ export default function LandlordLeads() {
       if (error) throw error;
     },
     onMutate: async ({ isaLeadId, stage }) => {
-      const key = ['landlord-leads'];
+      const key = ['landlord-leads', activeBrandId];
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<LandlordLeadSummary[]>(key);
       queryClient.setQueryData<LandlordLeadSummary[]>(key, (old) =>
@@ -88,7 +91,7 @@ export default function LandlordLeads() {
       return { prev };
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['landlord-leads'], ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(['landlord-leads', activeBrandId], ctx.prev);
     },
   });
 

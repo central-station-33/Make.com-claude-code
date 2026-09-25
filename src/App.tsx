@@ -1,5 +1,6 @@
 
 import { AuthProvider } from "@/contexts/AuthContext";
+import { BrandProvider } from "@/contexts/BrandContext";
 import { AuthFormProvider } from "@/contexts/auth/AuthFormContext";
 import { AppRoutes } from "@/routes/AppRoutes";
 import { Toaster } from "@/components/ui/toaster";
@@ -26,10 +27,12 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>
-            <AuthFormProvider>
-              <AppRoutes />
-              <Toaster />
-            </AuthFormProvider>
+            <BrandProvider>
+              <AuthFormProvider>
+                <AppRoutes />
+                <Toaster />
+              </AuthFormProvider>
+            </BrandProvider>
           </AuthProvider>
         </BrowserRouter>
       </QueryClientProvider>

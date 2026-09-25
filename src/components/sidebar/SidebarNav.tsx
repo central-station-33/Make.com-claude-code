@@ -1,5 +1,6 @@
 
-import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, MapPin, Building2, Building, Megaphone, User, Users } from "lucide-react";
+import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, MapPin, Building2, Building, Megaphone, User, Users, Palette } from "lucide-react";
+import { useBrand } from "@/contexts/BrandContext";
 import { useQuery } from "@tanstack/react-query";
 import { inrange } from "@/integrations/supabase/inrange";
 import SidebarNavItem from "./SidebarNavItem";
@@ -85,6 +86,12 @@ const teamItems = [
     path: "/team",
     icon: Users,
     label: "Team"
+  },
+  {
+    id: "brands",
+    path: "/brands",
+    icon: Palette,
+    label: "Brands"
   }
 ];
 
@@ -111,16 +118,18 @@ const NavSection = ({ title, items }: { title?: string; items: NavItem[] }) => (
 
 const SidebarNav = () => {
   const { isBroker } = useCurrentTeamAgent();
+  const { activeBrandId } = useBrand();
   // Exclusive properties: RLS returns only those the user may access
   // (brokers, or agents on the property team), so the section hides itself.
   const { data: exclusives = [] } = useQuery({
-    queryKey: ["nav-exclusive-properties"],
+    queryKey: ["nav-exclusive-properties", activeBrandId],
     queryFn: async () => {
-      const { data, error } = await inrange
+      let q = inrange
         .from("exclusive_properties" as never)
         .select("slug, name")
-        .eq("status", "active")
-        .order("name");
+        .eq("status", "active");
+      if (activeBrandId) q = q.eq("brand_id" as never, activeBrandId as never);
+      const { data, error } = await q.order("name");
       if (error) return [];
       return (data ?? []) as unknown as { slug: string; name: string }[];
     },

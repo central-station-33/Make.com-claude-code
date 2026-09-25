@@ -26,6 +26,7 @@ const RentalLeads = lazy(() => import(/* webpackChunkName: "rental-leads" */ '@/
 const RentalLeadDetail = lazy(() => import(/* webpackChunkName: "rental-lead-detail" */ '@/pages/RentalLeadDetail'));
 const LandlordLeads = lazy(() => import(/* webpackChunkName: "landlord-leads" */ '@/pages/LandlordLeads'));
 const LandlordLeadDetail = lazy(() => import(/* webpackChunkName: "landlord-lead-detail" */ '@/pages/LandlordLeadDetail'));
+const Brands = lazy(() => import(/* webpackChunkName: "brands" */ '@/pages/Brands'));
 const ExclusiveProperty = lazy(() => import(/* webpackChunkName: "exclusive-property" */ '@/pages/ExclusiveProperty'));
 
 const PageLoader = () => (
@@ -171,6 +172,14 @@ export const AppRoutes = () => {
           element={
             <PrivateRoute>
               <InRangeAddLead />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/brands"
+          element={
+            <PrivateRoute>
+              <Brands />
             </PrivateRoute>
           }
         />
