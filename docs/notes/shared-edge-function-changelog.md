@@ -21,6 +21,15 @@ migration filenames is self-attested. The structure exists to make
 inaccurate or skipped entries cheap to spot after the fact, not to prevent
 them.
 
+## 20260925-02 — Brand-aware text signatures + brand-based access
+
+- **follow-up-cadence v40** (verify_jwt=false, x-make-secret): signature and sending number now come from the lead's brand profile (`brands.sms_signature`, `brands.sms_from_number`, fallback env TWILIO_FROM_NUMBER). Removed hardcoded "Jet Realty Advisors" / "MVP Team, Solace Leasing". Leads whose brand is missing/paused are skipped. Consent gate unchanged (sms_consent=true, sms_opt_out=false). Eligible leads at deploy: 0.
+- **respond-lead v43** (verify_jwt=false, x-make-secret): deployed v42 had diverged from the repo (v42 = STOP/opt-out handling, no consent gate, signed "— InRange"; repo = consent gate + leasing detail writes, never deployed). v43 merges both: STOP handling + opt-out carry-forward, consent gate (sms_consent or inbound SMS), rental_inquiries/landlord_leads/lead_source_events writes, and brand-profile signature appended in code. New optional payload fields: `brand_id` or `brand`/`brand_slug` ('jra','hlr'). No production auto-replies had ever been logged before this deploy.
+- **Migration brand_access** (prod + test branch): `can_access_brand(uuid)` (security definer, authenticated only) and RESTRICTIVE "brand isolation" policies on isa_leads, properties, rental_units, exclusive_properties. Agents only see/write rows in brands where they have an active brand_members row; brokers unaffected; service role unaffected.
+- Frontend: Add Lead and CSV import tag new properties with the active brand.
+- Tests: branch fixture test (HLR-only agent 2/5 leads, cannot insert or move a lead into JRA; dual-brand agent 3; broker 6; anon 0; anon cannot call can_access_brand). Prod rolled-back check: broker 199 leads/924 properties/196 units/1 exclusive (unchanged); James agent 37 leads, 2 brands. Both functions return 401 without the secret.
+- commit: (this commit)
+
 ## Entry format (entries dated 2026-09-23T16:00Z or later)
 
 Append newest entries at the top, immediately below this section, above the

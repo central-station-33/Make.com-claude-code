@@ -28,16 +28,39 @@ const SEGMENT_CONTEXT: Record<string, string> = {
   renter:             'renter looking for an apartment or home in NY/NJ',
 };
 
-// Module -> public brand. distressed_investor stays InRange (internal
-// wholesale/acquisitions channel); every consumer-facing residential and
-// rental touchpoint uses the public brokerage brand. This is a default —
-// override by passing `brand` explicitly in the payload if a specific
-// campaign needs something else.
-const MODULE_BRAND: Record<string, string> = {
-  distressed_investor: 'InRange',
-  residential_sale:    'Jet Realty Advisors',
-  rental_leasing:       'Jet Realty Advisors',
-};
+// Branding comes from brand profiles (public.brands). Resolution order:
+//   1. brand_id (uuid) or brand / brand_slug (e.g. 'jra', 'hlr') in the payload
+//   2. the existing lead's brand_id
+//   3. the default brand (jra)
+// Exclusive-property leads are re-tagged by the DB trigger
+// sync_brand_from_exclusive, and we re-read brand_id after insert so the
+// text is signed with whatever brand the lead actually landed in.
+// The signature is appended in code; the model is told not to sign off.
+type BrandProfile = { id: string; slug: string; display_name: string; sms_signature: string; sms_from_number: string | null; status: string };
+
+// Twilio's recognized STOP keywords (case-insensitive, exact match after trim)
+// https://www.twilio.com/docs/messaging/features/opt-out-keywords
+const OPT_OUT_KEYWORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit']);
+function isOptOutMessage(message?: string): boolean {
+  if (!message) return false;
+  return OPT_OUT_KEYWORDS.has(message.trim().toLowerCase());
+}
+
+async function sendSms(to: string, from: string, body: string): Promise<boolean> {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !from) return false;
+  const res = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ To: to, From: from, Body: body }).toString(),
+    }
+  );
+  return res.ok;
+}
 
 const LEAD_ROLE_CONTEXT: Record<string, string> = {
   renter:   'looking for a rental in NY/NJ',
@@ -63,7 +86,7 @@ serve(async (req) => {
     sms_consent = false,
     marketing_consent = false,
     consent_source,
-    brand: brandOverride,
+    brand: brandParam, brand_slug: brandSlugParam, brand_id: brandIdParam,
     campaign, utm_source, utm_medium, utm_campaign, utm_content,
     landing_page, referrer_url,
     // Rental Leasing module detail — only meaningful when lead_role is
@@ -81,14 +104,35 @@ serve(async (req) => {
   const supabase = getServiceClient();
 
   const [{ data: byPhone }, { data: byEmail }] = await Promise.all([
-    phone ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent')
+    phone ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent,sms_opt_out,brand_id')
               .eq('phone', phone).not('outreach_status','in','("dead","closed")').maybeSingle()
           : Promise.resolve({ data: null }),
-    email ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent')
+    email ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent,sms_opt_out,brand_id')
               .eq('email', email).not('outreach_status','in','("dead","closed")').maybeSingle()
           : Promise.resolve({ data: null }),
   ]);
   const existing = byPhone ?? byEmail;
+
+  // Check ALL history (including dead/closed leads) for a prior opt-out, so a
+  // new lead row for the same phone/email never silently resets it.
+  let everOptedOut = !!existing?.sms_opt_out;
+  if (!everOptedOut && (phone || email)) {
+    let q = supabase.from('isa_leads').select('id', { count: 'exact', head: true }).eq('sms_opt_out', true);
+    q = phone && email ? q.or(`phone.eq.${phone},email.eq.${email}`)
+      : phone ? q.eq('phone', phone) : q.eq('email', email!);
+    const { count } = await q;
+    everOptedOut = !!count && count > 0;
+  }
+
+  // Resolve the requested brand (payload) before insert.
+  const brandKey = (brandSlugParam || brandParam || '').toString().trim().toLowerCase();
+  let requestedBrandId: string | null = null;
+  if (brandIdParam) {
+    requestedBrandId = String(brandIdParam);
+  } else if (brandKey) {
+    const { data: b } = await supabase.from('brands').select('id').eq('slug', brandKey).maybeSingle();
+    requestedBrandId = b?.id ?? null;
+  }
 
   let leadId: string;
   let isNewLead = false;
@@ -123,6 +167,7 @@ serve(async (req) => {
         routing:              'new',
         source_name:          source_name ?? channel,
         source_url,
+        ...(requestedBrandId && { brand_id: requestedBrandId }),
         sms_consent:          !!sms_consent,
         marketing_consent:    !!marketing_consent,
         consent_source:       consent_source ?? null,
@@ -138,6 +183,53 @@ serve(async (req) => {
     isNewLead = true;
   }
 
+  if (isNewLead && everOptedOut && !isOptOutMessage(inbound_message)) {
+    await supabase.from('isa_leads').update({
+      sms_opt_out: true, sms_opt_out_at: new Date().toISOString(),
+    }).eq('id', leadId);
+  }
+
+  // Brand the lead actually carries (after defaults + exclusive-property trigger).
+  const { data: leadBrandRow } = await supabase.from('isa_leads').select('brand_id').eq('id', leadId).single();
+  const { data: brandRow } = await supabase
+    .from('brands')
+    .select('id, slug, display_name, sms_signature, sms_from_number, status')
+    .eq('id', leadBrandRow?.brand_id ?? '')
+    .maybeSingle();
+  const brandProfile = brandRow as BrandProfile | null;
+  const brandOk = !!brandProfile && brandProfile.status === 'active' && !!brandProfile.sms_signature?.trim();
+  const brand = brandOk ? brandProfile!.display_name : 'our team';
+  const signature = brandOk ? brandProfile!.sms_signature.trim() : '';
+  const fromNumber = (brandOk && brandProfile!.sms_from_number?.trim()) || TWILIO_FROM_NUMBER;
+
+  // STOP handling first: record it, send the single confirmation carriers expect.
+  if (isOptOutMessage(inbound_message)) {
+    await supabase.from('isa_leads').update({
+      sms_opt_out: true, sms_opt_out_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }).eq('id', leadId);
+    const { data: tn } = await supabase.rpc('next_touch_number', { p_lead_id: leadId });
+    await supabase.from('lead_touches').insert({
+      lead_id: leadId, touch_number: tn ?? 1, channel, outcome: 'not_interested',
+      notes: `Opt-out received via inbound message: "${(inbound_message ?? '').slice(0, 120)}"`,
+      isa_name: signature ? `${signature} (auto)` : 'InRange Auto', touched_at: new Date().toISOString(),
+    });
+    const confirmSent = phone
+      ? await sendSms(phone, fromNumber, `You've been unsubscribed and won't receive further messages from ${signature || 'us'}.`)
+      : false;
+    return json({ success: true, lead_id: leadId, is_new_lead: isNewLead, opted_out: true, sms_sent: confirmSent });
+  }
+
+  // Previously opted out: never auto-text again without documented re-consent.
+  if (everOptedOut) {
+    const { data: tn } = await supabase.rpc('next_touch_number', { p_lead_id: leadId });
+    await supabase.from('lead_touches').insert({
+      lead_id: leadId, touch_number: tn ?? 1, channel, outcome: 'no_answer',
+      notes: `Inbound message from opted-out lead (not auto-responded): "${(inbound_message ?? '').slice(0, 120)}"`,
+      isa_name: signature ? `${signature} (auto)` : 'InRange Auto', touched_at: new Date().toISOString(),
+    });
+    return json({ success: true, lead_id: leadId, is_new_lead: isNewLead, opted_out: true, sms_sent: false, note: 'lead previously opted out; no automated message sent' });
+  }
+
   const effectiveSegment = (existing?.segment ?? segment) as string;
   const effectiveMarket  = (existing?.market  ?? market)  as string;
   const effectiveModule  = (existing?.module  ?? moduleParam) as string | null;
@@ -151,7 +243,6 @@ serve(async (req) => {
   // but no consent flag) gets a task for a human to reach out by an
   // allowed channel instead of an automatic text.
   const hasConsentToText = !!(existing?.sms_consent) || !!sms_consent || channel === 'sms';
-  const brand = brandOverride ?? MODULE_BRAND[effectiveModule ?? ''] ?? 'InRange';
 
   let claudeResult: ClaudeResult | null = null;
   if (ANTHROPIC_API_KEY) {
@@ -161,30 +252,26 @@ serve(async (req) => {
     });
   }
 
-  const smsText = claudeResult?.sms_response ?? fallbackSms(name, effectiveMarket, brand);
+  let bodyText = (claudeResult?.sms_response ?? fallbackSms(name, effectiveMarket, brand)).trim();
+  // Strip any sign-off the model adds anyway; ours is appended in code.
+  bodyText = bodyText.replace(/\s*[—-]\s*(InRange|Jet Realty Advisors|JRA|MVP Team[^—-]*|Highline Residential|our team)\.?$/i, '').trim();
+  const optOutLine = alreadyResponded ? '' : ' Reply STOP to opt out.';
+  const smsText = signature ? `${bodyText} — ${signature}${optOutLine}` : bodyText;
 
   let smsSent = false;
-  if (phone && hasConsentToText && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER) {
-    const twilioRes = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({ To: phone, From: TWILIO_FROM_NUMBER, Body: smsText }).toString(),
-      }
-    );
-    smsSent = twilioRes.ok;
+  // Never send under a missing/paused brand; a human gets the task instead.
+  if (phone && hasConsentToText && brandOk) {
+    smsSent = await sendSms(phone, fromNumber, smsText);
   }
 
-  if (phone && !hasConsentToText) {
+  if (phone && (!hasConsentToText || !brandOk)) {
     await supabase.from('lead_tasks').insert({
       isa_lead_id: leadId,
       task_type:   'manual_first_contact_no_sms_consent',
       status:      'open',
-      notes:       `No SMS consent on file — reach out by phone/email instead. Drafted message: "${smsText}"`,
+      notes:       !hasConsentToText
+        ? `No SMS consent on file — reach out by phone/email instead. Drafted message: "${smsText}"`
+        : `Brand profile missing or paused — not auto-texted. Drafted message: "${smsText}"`,
     });
   }
 
@@ -268,8 +355,8 @@ serve(async (req) => {
     touch_number: touchNum ?? 1,
     channel,
     outcome:      'no_answer',
-    notes:        smsSent ? `Auto-responded: "${smsText.slice(0, 120)}"` : `Drafted (not sent — no consent): "${smsText.slice(0, 120)}"`,
-    isa_name:     'InRange Auto',
+    notes:        smsSent ? `Auto-responded: "${smsText.slice(0, 120)}"` : `Drafted (not sent): "${smsText.slice(0, 120)}"`,
+    isa_name:     signature ? `${signature} (auto)` : 'InRange Auto',
     touched_at:   new Date().toISOString(),
   });
 
@@ -291,7 +378,7 @@ serve(async (req) => {
   return json({
     success: true, lead_id: leadId, is_new_lead: isNewLead, sms_sent: smsSent,
     sms_skipped_no_consent: !!phone && !hasConsentToText,
-    response_text: smsText, brand, routing: claudeResult?.routing ?? 'new', bant_score: claudeResult?.bant_score ?? null,
+    response_text: smsText, brand: brandProfile?.slug ?? null, routing: claudeResult?.routing ?? 'new', bant_score: claudeResult?.bant_score ?? null,
   });
 });
 
@@ -310,13 +397,13 @@ async function callClaude(params: {
 }): Promise<ClaudeResult | null> {
   const { name, inbound_message, segment, leadRole, market, isNewLead, alreadyResponded, brand } = params;
   const ctx = (leadRole && LEAD_ROLE_CONTEXT[leadRole]) ?? SEGMENT_CONTEXT[segment] ?? segment;
-  const prompt = `You are an ISA at ${brand}, a top NYC/NJ brokerage.
+  const prompt = `You are an ISA writing on behalf of ${brand}, a NYC/NJ real estate team.
 A ${ctx} just contacted you${alreadyResponded ? ' again' : ' for the first time'}.
 Lead name: ${name ?? 'Unknown'}
 Market: ${market.toUpperCase()}
 Their message: "${inbound_message ?? 'No message — form/portal submission'}"
 Return ONLY valid JSON:
-{"sms_response":"<under 160 chars, warm/direct, ends with one question about timeline or availability, sign off '— ${brand}', no emojis>","ai_summary":"<2 sentences: who this is + why they need real estate NOW>","isa_talking_points":["<point 1>","<point 2>","<point 3>"],"bant_score":<0-12>,"motivation_score":<1-5>,"routing":"<hot|warm|nurture|cold>"}
+{"sms_response":"<under 120 chars, warm/direct, ends with one question about timeline or availability, no signature or sign-off (one is appended automatically), no emojis, no links>","ai_summary":"<2 sentences: who this is + why they need real estate NOW>","isa_talking_points":["<point 1>","<point 2>","<point 3>"],"bant_score":<0-12>,"motivation_score":<1-5>,"routing":"<hot|warm|nurture|cold>"}
 ROUTING: hot=bant≥9+motivation≥4 | warm=bant≥7 OR motivation≥3 | nurture=bant≥4 | cold=else
 Inbound leads score at least 2 higher than outbound.
 Never state or imply anything about a neighborhood's schools, crime, safety, or the kind of people who live there, and never mention or infer race, religion, national origin, family status, disability, or other protected characteristics — this is a fair-housing requirement, not a style preference.`;
@@ -335,14 +422,14 @@ Never state or imply anything about a neighborhood's schools, crime, safety, or 
   if (start === -1 || end === -1) return null;
   try {
     const parsed = JSON.parse(stripped.slice(start, end + 1));
-    if (parsed.sms_response?.length > 160) parsed.sms_response = parsed.sms_response.slice(0, 157) + '...';
+    if (parsed.sms_response?.length > 130) parsed.sms_response = parsed.sms_response.slice(0, 127) + '...';
     return parsed as ClaudeResult;
   } catch { return null; }
 }
 
-function fallbackSms(name?: string, market = 'nyc', brand = 'InRange'): string {
+function fallbackSms(name?: string, market = 'nyc', brand = 'our team'): string {
   const area = market === 'nj' ? 'NJ' : 'NYC & NJ';
-  return `Hi${name ? ` ${name}` : ''}, thanks for reaching out to ${brand} — we cover ${area}. When's a good time for a quick call this week? — ${brand}`;
+  return `Hi${name ? ` ${name}` : ''}, thanks for reaching out to ${brand}. We cover ${area}. When's a good time for a quick call this week?`;
 }
 
 function json(body: unknown, status = 200): Response {

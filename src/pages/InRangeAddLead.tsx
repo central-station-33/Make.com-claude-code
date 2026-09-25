@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
 import { PriorityTier } from '@/types/inrange';
 import { useCurrentTeamAgent } from '@/hooks/useCurrentTeamAgent';
+import { useBrand } from '@/contexts/BrandContext';
 import { ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 
 type FormData = {
@@ -40,6 +41,7 @@ const LABEL_CLASS = 'block text-xs font-medium text-gray-600 dark:text-gray-400 
 export default function InRangeAddLead() {
   const navigate = useNavigate();
   const { teamAgent, isBroker, isLoading: agentLoading } = useCurrentTeamAgent();
+  const { activeBrandId } = useBrand();
   const [form, setForm] = useState<FormData>(EMPTY);
   const [saved, setSaved] = useState(false);
 
@@ -69,6 +71,9 @@ export default function InRangeAddLead() {
           // creator. Brokers leave it unassigned (null) so it shows up as
           // an open lead they can hand out.
           assigned_agent_id: isBroker ? null : teamAgent?.id ?? null,
+          // Tag the lead with the brand currently selected in the switcher;
+          // brand access rules only let agents write to their own brands.
+          ...(activeBrandId && { brand_id: activeBrandId }),
         } as any)
         .select('id')
         .single();

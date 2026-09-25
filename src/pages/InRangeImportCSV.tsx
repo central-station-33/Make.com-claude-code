@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
 import { ArrowLeft, Upload, FileText, AlertTriangle, CheckCircle2, Loader2, X } from 'lucide-react';
+import { useBrand } from '@/contexts/BrandContext';
 
 type CSVRow = {
   address: string;
@@ -51,6 +52,7 @@ export default function InRangeImportCSV() {
   const [rows, setRows] = useState<CSVRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [parseError, setParseError] = useState('');
+  const { activeBrandId } = useBrand();
 
   const importRows = useMutation({
     mutationFn: async () => {
@@ -65,6 +67,7 @@ export default function InRangeImportCSV() {
         priority_tier: 'Tier 3',
         enrichment_status: 'pending',
         status: 'new_lead',
+        ...(activeBrandId && { brand_id: activeBrandId }),
       }));
 
       const { error } = await inrange.from('properties').insert(payload as any);

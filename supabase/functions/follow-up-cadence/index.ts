@@ -12,10 +12,12 @@
  *   - Step 1 carries "Reply STOP to opt out".
  *   - Messages never reference protected characteristics (Fair Housing).
  *
- * BRANDING:
- *   - Exclusive Leasing leads (module = 'exclusive_leasing') are signed with
- *     the property's team brand (e.g. Solace → "MVP Team, Solace Leasing").
- *   - Everything else is signed "Jet Realty Advisors" (no more "— InRange").
+ * BRANDING (brand profiles, public.brands):
+ *   - Every lead carries brand_id. The text is signed with that brand's
+ *     sms_signature (e.g. "Jet Realty Advisors", "MVP Team @ Highline
+ *     Residential") and sent from its sms_from_number when one is set.
+ *   - Leads whose brand is missing or not active are skipped, never
+ *     sent under a fallback name.
  *   The signature and opt-out line are appended in code, never by the model.
  *
  * Cadence (days from previous step):
@@ -46,14 +48,7 @@ function getServiceClient() {
 // Days to wait from the PREVIOUS step before firing the next one
 const CADENCE_DELAYS = [1, 2, 4, 7, 16];
 
-const DEFAULT_SIGNATURE = 'Jet Realty Advisors';
-const OPT_OUT_LINE      = 'Reply STOP to opt out.';
-
-// Short SMS signatures for exclusive properties, keyed by slug. Falls back to
-// "<Property> Leasing" if a new exclusive is added without an entry here.
-const EXCLUSIVE_SIGNATURE: Record<string, string> = {
-  solace: 'MVP Team, Solace Leasing',
-};
+const OPT_OUT_LINE = 'Reply STOP to opt out.';
 
 const STEP_TONE: Record<number, string> = {
   1: 'warm check-in — brief, ask about timing, no pressure',
@@ -94,7 +89,7 @@ const EXCLUSIVE_FALLBACK: Record<number, string> = {
   5: "last note from us about {P}. If timing changes, we're here to help.",
 };
 
-const CADENCE_SYSTEM_PROMPT = `You are a leasing and sales assistant for Jet Realty Advisors, a NYC/NJ real estate brokerage. You write personalized follow-up SMS messages to prospects who have agreed to receive texts.
+const CADENCE_SYSTEM_PROMPT = `You are a leasing and sales assistant for a NYC/NJ real estate team. You write personalized follow-up SMS messages to prospects who have agreed to receive texts.
 
 YOUR VOICE:
 - Warm, human, conversational — never salesy or pushy
@@ -123,8 +118,10 @@ type Lead = {
   id: string; full_name: string | null; entity_name: string | null; phone: string | null;
   segment: string; market: string; cadence_step: number | null; last_cadence_at: string | null;
   created_at: string; module: string | null; exclusive_property_id: string | null;
-  sms_consent: boolean | null; sms_opt_out: boolean | null;
+  sms_consent: boolean | null; sms_opt_out: boolean | null; brand_id: string | null;
 };
+
+type BrandProfile = { id: string; display_name: string; sms_signature: string; sms_from_number: string | null; status: string };
 
 type Exclusive = { id: string; slug: string; name: string; neighborhood: string | null; address: string };
 
@@ -143,7 +140,7 @@ serve(async (req) => {
 
   const { data: leads, error } = await supabase
     .from('isa_leads')
-    .select('id, full_name, entity_name, phone, segment, market, cadence_step, last_cadence_at, created_at, module, exclusive_property_id, sms_consent, sms_opt_out')
+    .select('id, full_name, entity_name, phone, segment, market, cadence_step, last_cadence_at, created_at, module, exclusive_property_id, sms_consent, sms_opt_out, brand_id')
     .in('outreach_status', ['new', 'attempting', 'contacted'])
     .eq('cadence_paused', false)
     // TCPA: only leads with documented SMS consent, never opted-out leads.
@@ -183,6 +180,17 @@ serve(async (req) => {
     for (const ep of (eps ?? []) as Exclusive[]) exclusives.set(ep.id, ep);
   }
 
+  // Brand profiles for due leads (signature, sending number, status).
+  const brandIds = [...new Set(due.map(l => l.brand_id).filter(Boolean))] as string[];
+  const brands = new Map<string, BrandProfile>();
+  if (brandIds.length) {
+    const { data: bs } = await supabase
+      .from('brands')
+      .select('id, display_name, sms_signature, sms_from_number, status')
+      .in('id', brandIds);
+    for (const b of (bs ?? []) as BrandProfile[]) brands.set(b.id, b);
+  }
+
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
@@ -199,23 +207,27 @@ serve(async (req) => {
         throw new Error('exclusive property not found; skipping to avoid wrong branding');
       }
 
+      const brand = lead.brand_id ? brands.get(lead.brand_id) : undefined;
+      if (!brand || brand.status !== 'active' || !brand.sms_signature?.trim()) {
+        throw new Error('brand profile missing or not active; skipping to avoid wrong branding');
+      }
+
       const ctx = exclusive
         ? `renter who inquired about ${exclusive.name}, a new rental building at ${exclusive.address}${exclusive.neighborhood ? ` in ${exclusive.neighborhood}, Brooklyn` : ''}`
         : (SEGMENT_CONTEXT[lead.segment] ?? lead.segment);
 
       const bodyText = ANTHROPIC_API_KEY
-        ? await generateSms({ name, segmentCtx: ctx, market: lead.market, step: nextStep })
+        ? await generateSms({ name, segmentCtx: ctx, market: lead.market, step: nextStep, brandName: brand.display_name })
         : buildFallback(name, nextStep, exclusive?.name);
 
-      const signature = exclusive
-        ? (EXCLUSIVE_SIGNATURE[exclusive.slug] ?? `${exclusive.name} Leasing`)
-        : DEFAULT_SIGNATURE;
+      const signature = brand.sms_signature.trim();
+      const fromNumber = brand.sms_from_number?.trim() || TWILIO_FROM_NUMBER;
       const smsText = `${bodyText} — ${signature}${nextStep === 1 ? ` ${OPT_OUT_LINE}` : ''}`;
 
       if (dry_run) {
         previews.push({ lead_id: lead.id, text: smsText });
       } else {
-        if (!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER)) {
+        if (!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && fromNumber)) {
           throw new Error('Twilio not configured');
         }
         const tw = await fetch(
@@ -228,7 +240,7 @@ serve(async (req) => {
             },
             body: new URLSearchParams({
               To:   lead.phone!,
-              From: TWILIO_FROM_NUMBER,
+              From: fromNumber,
               Body: smsText,
             }).toString(),
           }
@@ -242,7 +254,7 @@ serve(async (req) => {
           channel:      'sms',
           outcome:      'no_answer',
           notes:        `Cadence step ${nextStep}: "${smsText.slice(0, 120)}"`,
-          isa_name:     exclusive ? `${signature} (auto)` : 'JRA Auto',
+          isa_name:     `${signature} (auto)`,
           touched_at:   now.toISOString(),
         });
 
@@ -272,11 +284,13 @@ async function generateSms(params: {
   segmentCtx: string;
   market: string;
   step: number;
+  brandName: string;
 }): Promise<string> {
-  const { name, segmentCtx, market, step } = params;
+  const { name, segmentCtx, market, step, brandName } = params;
   const tone = STEP_TONE[step] ?? STEP_TONE[1];
 
   const userPrompt = `Write a step ${step} follow-up SMS to a ${segmentCtx}.
+You are writing on behalf of ${brandName}.
 Lead first name: ${name ?? 'Unknown'}. Market: ${(market ?? '').toUpperCase()}.
 Tone for this step: ${tone}.`;
 
@@ -306,7 +320,7 @@ Tone for this step: ${tone}.`;
   const data = await res.json();
   let text = (data.content[0]?.text ?? '').trim().replace(/^["']|["']$/g, '');
   // Strip any sign-off the model adds anyway; ours is appended in code.
-  text = text.replace(/\s*[—-]\s*(InRange|Jet Realty Advisors|JRA)\.?$/i, '').trim();
+  text = text.replace(/\s*[—-]\s*(InRange|Jet Realty Advisors|JRA|MVP Team[^—-]*|Highline Residential)\.?$/i, '').trim();
   if (text.length > 150) text = text.slice(0, 147) + '...';
   return text;
 }
