@@ -26,6 +26,7 @@ const RentalLeads = lazy(() => import(/* webpackChunkName: "rental-leads" */ '@/
 const RentalLeadDetail = lazy(() => import(/* webpackChunkName: "rental-lead-detail" */ '@/pages/RentalLeadDetail'));
 const LandlordLeads = lazy(() => import(/* webpackChunkName: "landlord-leads" */ '@/pages/LandlordLeads'));
 const LandlordLeadDetail = lazy(() => import(/* webpackChunkName: "landlord-lead-detail" */ '@/pages/LandlordLeadDetail'));
+const ExclusiveProperty = lazy(() => import(/* webpackChunkName: "exclusive-property" */ '@/pages/ExclusiveProperty'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen bg-background">
@@ -236,6 +237,16 @@ export const AppRoutes = () => {
           element={
             <PrivateRoute>
               <LandlordLeadDetail />
+            </PrivateRoute>
+          }
+        />
+
+        {/* Exclusive Leasing module (e.g. Solace). RLS limits data to brokers + property team. */}
+        <Route
+          path="/exclusives/:slug"
+          element={
+            <PrivateRoute>
+              <ExclusiveProperty />
             </PrivateRoute>
           }
         />

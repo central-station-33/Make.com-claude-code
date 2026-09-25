@@ -26,6 +26,68 @@ them.
 Append newest entries at the top, immediately below this section, above the
 "Legacy entries" divider.
 
+<a id="entry-20260924-12"></a>
+## [2026-09-25 00:40 UTC] edge-function:follow-up-cadence — SMS consent gate + JRA/Solace branding — perplexity-computer
+agent: perplexity-computer
+entry-id: 20260924-12
+target-type: edge-function
+target-id: follow-up-cadence
+window-check: yes
+verify_jwt-before: false
+verify_jwt-after: false
+artifact: supabase-version:39
+commit: (this commit)
+status: done
+related-entries: entry-20260924-11
+
+User-approved TCPA fix. Baseline was the DEPLOYED v38 (which already had an
+`sms_opt_out = false` filter that was never committed to the repo); the repo
+copy is now brought in line. Changes: (1) query requires `sms_consent = true`
+and `sms_opt_out = false`, plus an independent per-lead check; (2) signature
+and "Reply STOP to opt out." (step 1) are appended in code — model is told not
+to sign; (3) signature is "Jet Realty Advisors", or for `exclusive_leasing`
+leads the property brand (Solace → "MVP Team, Solace Leasing"); an exclusive
+lead whose property can't be loaded is skipped rather than mis-branded;
+(4) renter/landlord/homeowner segment context and a Solace-specific context;
+(5) Fair Housing rule added to the prompt; (6) Twilio non-2xx now counts as a
+failure instead of silently marking the lead touched; (7) dry_run returns
+message previews. verify_jwt stays false (auth is the x-make-secret header).
+
+Verified: live endpoint returns 401 without/with wrong secret. Eligibility
+under old rule = 5 leads (none with consent); under new rule = 0 — i.e. the
+next scheduled run texts nobody until consent is captured. Not verified: an
+authenticated dry run (Make secret not available to this agent), and which
+Make scenario actually calls this function (header said S19, which is the
+"High-Value Homeowner Bridge" scenario) — still unresolved.
+
+<a id="entry-20260924-11"></a>
+## [2026-09-25 00:30 UTC] database:exclusive-leasing-module — Solace exclusive module + 183 units — perplexity-computer
+agent: perplexity-computer
+entry-id: 20260924-11
+target-type: migration
+target-id: 20260924233000_exclusive_leasing_module_solace.sql
+window-check: yes
+artifact: supabase-migration:exclusive_leasing_module_solace
+commit: (this commit)
+status: done
+related-entries: none
+
+New module value `exclusive_leasing`; tables `exclusive_properties` (seeded:
+solace) and `exclusive_property_agents`; `exclusive_property_id` on isa_leads
+and rental_units (+ unit columns floor, outdoor_sf, roof_private_sf,
+orientation, owner_advertised, staged, marketing_priority,
+pricing_review_note); SECURITY DEFINER helpers `can_access_exclusive`,
+`exclusive_of_lead/unit/inquiry`; RESTRICTIVE "exclusive isolation" policies
+on isa_leads, rental_units, rental_inquiries, rental_matches, tours,
+rental_applications, lead_tasks, lead_source_events (only bite on rows tied
+to an exclusive); min-advertised-rent trigger; views
+`exclusive_leasing_pipeline`, `exclusive_inventory_summary` (security_invoker).
+Tested first on branch xqjinjjgeiupmccsdrkf. 183 Solace market units loaded
+in prod from the owner tracker (confidential; seed SQL kept out of the repo).
+Prod checks: broker sees 183 Solace units, non-team agent 0, anon 0; standard
+13 units / 199 leads unchanged. Edge functions that insert leads do NOT yet
+route to exclusive_leasing — intake wiring is a later, separately approved step.
+
 <a id="entry-20260923-10"></a>
 ## [2026-09-24 00:03 UTC] edge-function:send-sms — fixed Twilio secret name, verified live send — perplexity-computer
 agent: perplexity-computer

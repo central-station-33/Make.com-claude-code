@@ -1,8 +1,22 @@
 /**
  * follow-up-cadence — automated lead nurture sequence.
  *
- * Runs daily at 9 AM via Make.com S19. Sends personalized Claude-generated
- * SMS to every lead that is due at its current cadence step.
+ * Invoked on a schedule by a Make.com scenario (the header previously said
+ * "S19", but Make S19 is "High-Value Homeowner Bridge" — the calling scenario
+ * is unconfirmed; see docs/notes/shared-edge-function-changelog.md).
+ * Sends personalized follow-up SMS to leads that are due at their cadence step.
+ *
+ * COMPLIANCE (TCPA) — non-negotiable, enforced twice (query + per-lead):
+ *   - Only leads with sms_consent = true are ever texted.
+ *   - Leads with sms_opt_out = true are never texted.
+ *   - Step 1 carries "Reply STOP to opt out".
+ *   - Messages never reference protected characteristics (Fair Housing).
+ *
+ * BRANDING:
+ *   - Exclusive Leasing leads (module = 'exclusive_leasing') are signed with
+ *     the property's team brand (e.g. Solace → "MVP Team, Solace Leasing").
+ *   - Everything else is signed "Jet Realty Advisors" (no more "— InRange").
+ *   The signature and opt-out line are appended in code, never by the model.
  *
  * Cadence (days from previous step):
  *   Step 0 → 1 : 1 day  after creation        (warm check-in)
@@ -32,6 +46,15 @@ function getServiceClient() {
 // Days to wait from the PREVIOUS step before firing the next one
 const CADENCE_DELAYS = [1, 2, 4, 7, 16];
 
+const DEFAULT_SIGNATURE = 'Jet Realty Advisors';
+const OPT_OUT_LINE      = 'Reply STOP to opt out.';
+
+// Short SMS signatures for exclusive properties, keyed by slug. Falls back to
+// "<Property> Leasing" if a new exclusive is added without an entry here.
+const EXCLUSIVE_SIGNATURE: Record<string, string> = {
+  solace: 'MVP Team, Solace Leasing',
+};
+
 const STEP_TONE: Record<number, string> = {
   1: 'warm check-in — brief, ask about timing, no pressure',
   2: 'add value — mention one relevant market data point or insight',
@@ -45,22 +68,33 @@ const SEGMENT_CONTEXT: Record<string, string> = {
   investor:          'real estate investor looking for NYC/NJ opportunities',
   motivated_seller:  'motivated seller looking to move their property quickly',
   first_time_buyer:  'first-time home buyer exploring the NYC/NJ market',
-  divorce:           'going through a life transition requiring real estate help',
-  empty_nester:      'homeowner looking to rightsize after kids moved out',
+  divorce:           'person going through a life transition requiring real estate help',
+  empty_nester:      'homeowner looking to rightsize',
   developer:         'developer evaluating land and project opportunities',
   expat_relocation:  'professional relocating to the NYC/NJ metro area',
   film_tv:           'film/TV production professional needing housing near set',
+  renter:            'renter looking for an apartment in the NYC/NJ area',
+  landlord:          'landlord looking to lease their rental unit',
+  homeowner:         'homeowner exploring their real estate options',
 };
 
 const FALLBACK: Record<number, string> = {
-  1: "just checking in — did you get a chance to think about timing? When works for a quick call? — InRange",
-  2: "NYC/NJ inventory is moving fast right now. Happy to share what's available in your range — worth a 5-min chat? — InRange",
-  3: "Market's been active this week. Don't want you to miss the right opportunity. Still thinking about making a move? — InRange",
-  4: 'Trying a different angle — is there a specific neighborhood, price point, or timeline question I can answer for you? — InRange',
-  5: "Last note from us — if timing or circumstances change, we're always here. Wishing you the best! — InRange",
+  1: 'just checking in. Did you get a chance to think about timing? When works for a quick call?',
+  2: "inventory is moving fast right now. Happy to share what's available in your range. Worth a 5-min chat?",
+  3: "the market's been active this week. Still thinking about making a move?",
+  4: 'is there a specific neighborhood, price point, or timeline question I can answer for you?',
+  5: "last note from us. If timing changes, we're always here. Wishing you the best!",
 };
 
-const CADENCE_SYSTEM_PROMPT = `You are an ISA at InRange Real Estate, a top NYC/NJ brokerage. You write personalized follow-up SMS messages to real estate prospects.
+const EXCLUSIVE_FALLBACK: Record<number, string> = {
+  1: 'thanks for your interest in {P}. Want to set up a tour this week?',
+  2: '{P} has homes with private outdoor space available now. Want me to send a few that fit your range?',
+  3: 'tours at {P} are filling up. Is there a day that works for you to see it?',
+  4: 'any questions about {P} I can answer, like layouts, move-in timing, or amenities?',
+  5: "last note from us about {P}. If timing changes, we're here to help.",
+};
+
+const CADENCE_SYSTEM_PROMPT = `You are a leasing and sales assistant for Jet Realty Advisors, a NYC/NJ real estate brokerage. You write personalized follow-up SMS messages to prospects who have agreed to receive texts.
 
 YOUR VOICE:
 - Warm, human, conversational — never salesy or pushy
@@ -69,12 +103,12 @@ YOUR VOICE:
 - Respectful of the prospect's timeline and decision process
 
 SMS RULES (non-negotiable):
-- Under 160 characters total including the signature
-- Always end with "— InRange"
-- No emojis
+- Under 140 characters. Do NOT add a signature or sign-off; one is appended automatically.
+- No emojis. No links.
 - End with exactly one question or call-to-action
 - Never repeat phrasing from earlier follow-ups
 - Sound like a person, not a template
+- Fair Housing: never mention or allude to race, color, religion, national origin, sex, disability, familial status (kids, family size), age, sexual orientation, gender identity, marital status, source of income, or any other protected characteristic. Never describe who a neighborhood or building is "good for" or "ideal for". Describe homes and amenities only.
 
 CADENCE CONTEXT:
 Step 1 (day 1): Warm check-in — brief, ask about timing, no pressure. They just heard from us.
@@ -84,6 +118,15 @@ Step 4 (day 14): New angle — ask a different question, try a different hook fo
 Step 5 (day 30): Respectful final message — leave the door open, wish them well.
 
 Return ONLY the SMS text — no quotes, no explanation, no preamble. Just the message.`;
+
+type Lead = {
+  id: string; full_name: string | null; entity_name: string | null; phone: string | null;
+  segment: string; market: string; cadence_step: number | null; last_cadence_at: string | null;
+  created_at: string; module: string | null; exclusive_property_id: string | null;
+  sms_consent: boolean | null; sms_opt_out: boolean | null;
+};
+
+type Exclusive = { id: string; slug: string; name: string; neighborhood: string | null; address: string };
 
 serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -100,62 +143,97 @@ serve(async (req) => {
 
   const { data: leads, error } = await supabase
     .from('isa_leads')
-    .select('id, full_name, entity_name, phone, segment, market, cadence_step, last_cadence_at, created_at')
+    .select('id, full_name, entity_name, phone, segment, market, cadence_step, last_cadence_at, created_at, module, exclusive_property_id, sms_consent, sms_opt_out')
     .in('outreach_status', ['new', 'attempting', 'contacted'])
     .eq('cadence_paused', false)
+    // TCPA: only leads with documented SMS consent, never opted-out leads.
+    .eq('sms_consent', true)
+    .eq('sms_opt_out', false)
     .lt('cadence_step', 5)
     .not('phone', 'is', null)
     .order('created_at', { ascending: true })
     .limit(limit);
 
   if (error) return json({ error: error.message }, 500);
-  if (!leads?.length) return json({ sent: 0, skipped: 0, due: 0 });
+  if (!leads?.length) return json({ sent: 0, skipped: 0, due: 0, dry_run });
 
   const now = new Date();
-  const due = leads.filter(lead => {
+  const due = (leads as Lead[]).filter(lead => {
+    // Second, independent consent check — never rely on the query alone.
+    if (lead.sms_consent !== true || lead.sms_opt_out === true) return false;
     const step      = lead.cadence_step ?? 0;
     const delayDays = CADENCE_DELAYS[step];
     const anchor    = step === 0
       ? new Date(lead.created_at)
-      : new Date(lead.last_cadence_at);
+      : new Date(lead.last_cadence_at ?? lead.created_at);
     const dueAt = new Date(anchor.getTime() + delayDays * 86_400_000);
     return now >= dueAt;
   });
 
-  if (!due.length) return json({ sent: 0, skipped: leads.length, due: 0 });
+  if (!due.length) return json({ sent: 0, skipped: leads.length, due: 0, dry_run });
+
+  // Load exclusive properties referenced by due leads (for branding/context).
+  const exclusiveIds = [...new Set(due.map(l => l.exclusive_property_id).filter(Boolean))] as string[];
+  const exclusives = new Map<string, Exclusive>();
+  if (exclusiveIds.length) {
+    const { data: eps } = await supabase
+      .from('exclusive_properties')
+      .select('id, slug, name, neighborhood, address')
+      .in('id', exclusiveIds);
+    for (const ep of (eps ?? []) as Exclusive[]) exclusives.set(ep.id, ep);
+  }
 
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
+  const previews: { lead_id: string; text: string }[] = [];
 
   for (const lead of due) {
     try {
-      const nextStep = (lead.cadence_step ?? 0) + 1;
-      const name     = lead.full_name ?? lead.entity_name;
-      const ctx      = SEGMENT_CONTEXT[lead.segment] ?? lead.segment;
+      const nextStep  = (lead.cadence_step ?? 0) + 1;
+      const name      = lead.full_name ?? lead.entity_name ?? undefined;
+      const exclusive = lead.module === 'exclusive_leasing' && lead.exclusive_property_id
+        ? exclusives.get(lead.exclusive_property_id)
+        : undefined;
+      if (lead.module === 'exclusive_leasing' && !exclusive) {
+        throw new Error('exclusive property not found; skipping to avoid wrong branding');
+      }
 
-      const smsText = ANTHROPIC_API_KEY
+      const ctx = exclusive
+        ? `renter who inquired about ${exclusive.name}, a new rental building at ${exclusive.address}${exclusive.neighborhood ? ` in ${exclusive.neighborhood}, Brooklyn` : ''}`
+        : (SEGMENT_CONTEXT[lead.segment] ?? lead.segment);
+
+      const bodyText = ANTHROPIC_API_KEY
         ? await generateSms({ name, segmentCtx: ctx, market: lead.market, step: nextStep })
-        : buildFallback(name, nextStep);
+        : buildFallback(name, nextStep, exclusive?.name);
 
-      if (!dry_run) {
-        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER) {
-          await fetch(
-            `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
-                'Content-Type':  'application/x-www-form-urlencoded',
-              },
-              body: new URLSearchParams({
-                To:   lead.phone,
-                From: TWILIO_FROM_NUMBER,
-                Body: smsText,
-              }).toString(),
-            }
-          );
+      const signature = exclusive
+        ? (EXCLUSIVE_SIGNATURE[exclusive.slug] ?? `${exclusive.name} Leasing`)
+        : DEFAULT_SIGNATURE;
+      const smsText = `${bodyText} — ${signature}${nextStep === 1 ? ` ${OPT_OUT_LINE}` : ''}`;
+
+      if (dry_run) {
+        previews.push({ lead_id: lead.id, text: smsText });
+      } else {
+        if (!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER)) {
+          throw new Error('Twilio not configured');
         }
+        const tw = await fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
+              'Content-Type':  'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              To:   lead.phone!,
+              From: TWILIO_FROM_NUMBER,
+              Body: smsText,
+            }).toString(),
+          }
+        );
+        if (!tw.ok) throw new Error(`Twilio ${tw.status}`);
 
         const { data: touchNum } = await supabase.rpc('next_touch_number', { p_lead_id: lead.id });
         await supabase.from('lead_touches').insert({
@@ -164,7 +242,7 @@ serve(async (req) => {
           channel:      'sms',
           outcome:      'no_answer',
           notes:        `Cadence step ${nextStep}: "${smsText.slice(0, 120)}"`,
-          isa_name:     'InRange Auto',
+          isa_name:     exclusive ? `${signature} (auto)` : 'JRA Auto',
           touched_at:   now.toISOString(),
         });
 
@@ -183,7 +261,10 @@ serve(async (req) => {
     }
   }
 
-  return json({ sent, failed, skipped: leads.length - due.length, due: due.length, dry_run, errors });
+  return json({
+    sent, failed, skipped: leads.length - due.length, due: due.length, dry_run, errors,
+    ...(dry_run ? { previews } : {}),
+  });
 });
 
 async function generateSms(params: {
@@ -196,7 +277,7 @@ async function generateSms(params: {
   const tone = STEP_TONE[step] ?? STEP_TONE[1];
 
   const userPrompt = `Write a step ${step} follow-up SMS to a ${segmentCtx}.
-Lead name: ${name ?? 'Unknown'}. Market: ${market.toUpperCase()}.
+Lead first name: ${name ?? 'Unknown'}. Market: ${(market ?? '').toUpperCase()}.
 Tone for this step: ${tone}.`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -224,12 +305,16 @@ Tone for this step: ${tone}.`;
   if (!res.ok) throw new Error(`Anthropic ${res.status}`);
   const data = await res.json();
   let text = (data.content[0]?.text ?? '').trim().replace(/^["']|["']$/g, '');
-  if (text.length > 160) text = text.slice(0, 157) + '...';
+  // Strip any sign-off the model adds anyway; ours is appended in code.
+  text = text.replace(/\s*[—-]\s*(InRange|Jet Realty Advisors|JRA)\.?$/i, '').trim();
+  if (text.length > 150) text = text.slice(0, 147) + '...';
   return text;
 }
 
-function buildFallback(name?: string, step = 1): string {
-  const base = FALLBACK[step] ?? FALLBACK[1];
+function buildFallback(name?: string, step = 1, propertyName?: string): string {
+  const base = propertyName
+    ? (EXCLUSIVE_FALLBACK[step] ?? EXCLUSIVE_FALLBACK[1]).replace(/\{P\}/g, propertyName)
+    : (FALLBACK[step] ?? FALLBACK[1]);
   return name ? `Hi ${name}, ${base}` : `Hi, ${base}`;
 }
 

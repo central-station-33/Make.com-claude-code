@@ -1,5 +1,7 @@
 
-import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, MapPin, Building2, Megaphone, User, Users } from "lucide-react";
+import { Home, Settings, MessageSquare, LayoutDashboard, ChartBar, MapPin, Building2, Building, Megaphone, User, Users } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { inrange } from "@/integrations/supabase/inrange";
 import SidebarNavItem from "./SidebarNavItem";
 import { useCurrentTeamAgent } from "@/hooks/useCurrentTeamAgent";
 
@@ -109,12 +111,31 @@ const NavSection = ({ title, items }: { title?: string; items: NavItem[] }) => (
 
 const SidebarNav = () => {
   const { isBroker } = useCurrentTeamAgent();
+  // Exclusive properties: RLS returns only those the user may access
+  // (brokers, or agents on the property team), so the section hides itself.
+  const { data: exclusives = [] } = useQuery({
+    queryKey: ["nav-exclusive-properties"],
+    queryFn: async () => {
+      const { data, error } = await inrange
+        .from("exclusive_properties" as never)
+        .select("slug, name")
+        .eq("status", "active")
+        .order("name");
+      if (error) return [];
+      return (data ?? []) as unknown as { slug: string; name: string }[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const exclusiveItems: NavItem[] = exclusives.map((p) => ({
+    id: `exclusive-${p.slug}`, path: `/exclusives/${p.slug}`, icon: Building, label: p.name, matchNested: true,
+  }));
 
   return (
     <nav className="space-y-6 px-2">
       <NavSection items={mainNavItems} />
       <NavSection title="Lead Management" items={leadManagementItems} />
       <NavSection title="Rental Leasing" items={leasingItems} />
+      {exclusiveItems.length > 0 && <NavSection title="Exclusives" items={exclusiveItems} />}
       <NavSection title="Communication" items={communicationItems} />
       {isBroker && <NavSection title="Admin" items={teamItems} />}
       <NavSection title="Account" items={accountItems} />
