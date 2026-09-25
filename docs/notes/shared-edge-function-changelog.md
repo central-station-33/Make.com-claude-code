@@ -36,7 +36,7 @@ window-check: yes
 verify_jwt-before: false
 verify_jwt-after: false
 artifact: supabase-version:39
-commit: (this commit)
+commit: 81c22db
 status: done
 related-entries: entry-20260924-11
 
@@ -68,7 +68,7 @@ target-type: migration
 target-id: 20260924233000_exclusive_leasing_module_solace.sql
 window-check: yes
 artifact: supabase-migration:exclusive_leasing_module_solace
-commit: (this commit)
+commit: 81c22db
 status: done
 related-entries: none
 
