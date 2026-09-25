@@ -31,9 +31,15 @@ to the browser) to the `respond-lead` Edge Function, which:
 - tags it `module=rental_leasing`, `lead_role=renter` or `landlord`,
 - writes the structured detail into `rental_inquiries` or `landlord_leads`,
 - records a `lead_source_events` row for UTM/campaign attribution,
-- only sends an automatic SMS if `sms_consent` was checked (or channel
-  indicates the lead texted in first) — otherwise creates a `lead_tasks`
-  row for an agent to reach out manually,
+- treats submitting the form as texting consent: there is **no checkbox**.
+  A notice line sits directly above the submit button, and hidden inputs send
+  `sms_consent=true`, `consent_source`, and `consent_notice_version`. The Edge
+  Function stores the exact notice wording for that version, the form source,
+  and the timestamp on the lead as proof of consent,
+- only sends an automatic SMS when that consent is present (or the lead texted
+  in first) and a phone number was given — otherwise creates a `lead_tasks`
+  row for an agent to reach out manually. Every first text ends with
+  "Reply STOP to opt out.",
 - always brands the response "Jet Realty Advisors", never "InRange".
 
 ## Before this goes live
@@ -43,9 +49,11 @@ to the browser) to the `respond-lead` Edge Function, which:
    file's `:root` are a generic professional real-estate palette, not your
    actual brand. Swap those CSS variables (and add a logo if you want one)
    before publishing.
-2. **Legal review the consent copy.** The wording in `.consent-box` matches
-   what was specified, but "easy to edit because legal review may be
-   required" was explicit in the brief — treat it as a draft, not final.
+2. **Consent notice (`.consent-notice`).** If you change the wording, bump
+   `consent_notice_version` in the form **and** add the new text under the same
+   key in `CONSENT_NOTICES` in `supabase/functions/respond-lead/index.ts`, so the
+   stored proof always matches what the visitor saw. Never add a pre-checked box
+   or hide the notice below the fold. Have counsel review the wording.
 3. **Test a real submission** before linking these from the live site — this
    was built and verified against the backend (schema, Edge Function, Make
    scenario) but never click-tested against a real browser/WordPress

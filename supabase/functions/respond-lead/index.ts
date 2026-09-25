@@ -62,6 +62,32 @@ async function sendSms(to: string, from: string, body: string): Promise<boolean>
   return res.ok;
 }
 
+// Consent notices shown on our forms (notice line above the submit button, no
+// checkbox). The form sends consent_notice_version; we store the exact wording
+// for that version with the lead as proof of what the person agreed to.
+// Keep in sync with public-site/*.html and the Meta lead-form disclaimers.
+// Never edit an existing entry: add a new version key instead.
+const CONSENT_NOTICES: Record<string, string> = {
+  'jra-web-rental-v1-2026-09-25':
+    'By clicking “Find My Rental”, you agree that Jet Realty Advisors may call and text you at the number you provided about your rental inquiry, including texts sent with automated technology. Consent is not a condition of renting, buying, or using our services. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out at any time.',
+  'jra-web-landlord-v1-2026-09-25':
+    'By clicking “Get My Leasing Plan”, you agree that Jet Realty Advisors may call and text you at the number you provided about your leasing inquiry, including texts sent with automated technology. Consent is not a condition of renting, buying, or using our services. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out at any time.',
+  'hlr-solace-web-v1-2026-09-25':
+    'By clicking “Check Availability”, you agree that MVP Team @ Highline Residential may call and text you at the number you provided about your rental inquiry, including texts sent with automated technology. Consent is not a condition of renting, buying, or using our services. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out at any time.',
+  'jra-meta-v1-2026-09-25':
+    'By submitting this form, you agree that Jet Realty Advisors may call and text you at the number provided about your inquiry, including texts sent with automated technology. Consent is not a condition of renting, buying, or using our services. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out at any time.',
+  'hlr-meta-v1-2026-09-25':
+    'By submitting this form, you agree that MVP Team @ Highline Residential may call and text you at the number provided about your inquiry, including texts sent with automated technology. Consent is not a condition of renting, buying, or using our services. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out at any time.',
+};
+
+// Form posts arrive as strings via Make: only an explicit true-ish value counts.
+function isTruthy(v: unknown): boolean {
+  if (v === true) return true;
+  if (typeof v === 'number') return v === 1;
+  if (typeof v === 'string') return ['true', '1', 'yes', 'on', 'y'].includes(v.trim().toLowerCase());
+  return false;
+}
+
 const LEAD_ROLE_CONTEXT: Record<string, string> = {
   renter:   'looking for a rental in NY/NJ',
   landlord: 'a property owner who needs leasing/tenant-placement help',
@@ -74,7 +100,15 @@ serve(async (req) => {
     return json({ error: 'Unauthorized' }, 401);
   }
 
-  const body = await req.json().catch(() => ({}));
+  // Accept JSON (existing callers) or form-urlencoded (Make S16 forwards web
+  // form fields this way so quotes/newlines in free text can't break the body).
+  const contentType = req.headers.get('content-type') ?? '';
+  const body: Record<string, any> = contentType.includes('application/x-www-form-urlencoded')
+    ? Object.fromEntries(
+        [...new URLSearchParams(await req.text().catch(() => '')).entries()]
+          .filter(([, v]) => v !== ''),
+      )
+    : await req.json().catch(() => ({}));
   const {
     name, phone, email, inbound_message,
     segment = 'first_time_buyer',
@@ -83,9 +117,10 @@ serve(async (req) => {
     source_name, source_url,
     module: moduleParam,
     lead_role: leadRoleParam,
-    sms_consent = false,
-    marketing_consent = false,
+    sms_consent: smsConsentParam = false,
+    marketing_consent: marketingConsentParam = false,
     consent_source,
+    consent_notice_version,
     brand: brandParam, brand_slug: brandSlugParam, brand_id: brandIdParam,
     campaign, utm_source, utm_medium, utm_campaign, utm_content,
     landing_page, referrer_url,
@@ -101,13 +136,30 @@ serve(async (req) => {
 
   if (!phone && !email) return json({ error: 'phone or email required' }, 400);
 
+  // Texting consent needs a phone number to attach to.
+  const sms_consent = !!phone && isTruthy(smsConsentParam);
+  const marketing_consent = isTruthy(marketingConsentParam);
+  const noticeVersion = consent_notice_version ? String(consent_notice_version).trim() : '';
+  const noticeText = noticeVersion ? (CONSENT_NOTICES[noticeVersion] ?? null) : null;
+  const consentAt = new Date().toISOString();
+  const consentEvidence = (sms_consent || marketing_consent) ? {
+    captured_at: consentAt,
+    sms_consent, marketing_consent,
+    consent_source: consent_source ?? null,
+    notice_version: noticeVersion || null,
+    notice_text: noticeText,
+    notice_version_unknown: !!noticeVersion && !noticeText,
+    channel, source_name: source_name ?? null, source_url: source_url ?? null,
+    landing_page: landing_page ?? null, phone: phone ?? null,
+  } : null;
+
   const supabase = getServiceClient();
 
   const [{ data: byPhone }, { data: byEmail }] = await Promise.all([
-    phone ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent,sms_opt_out,brand_id')
+    phone ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent,sms_opt_out,brand_id,raw_data')
               .eq('phone', phone).not('outreach_status','in','("dead","closed")').maybeSingle()
           : Promise.resolve({ data: null }),
-    email ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent,sms_opt_out,brand_id')
+    email ? supabase.from('isa_leads').select('id,segment,market,module,lead_role,outreach_status,first_response_at,sms_consent,sms_opt_out,brand_id,raw_data')
               .eq('email', email).not('outreach_status','in','("dead","closed")').maybeSingle()
           : Promise.resolve({ data: null }),
   ]);
@@ -140,12 +192,15 @@ serve(async (req) => {
   if (existing) {
     leadId = existing.id;
     // A consent flag passed on a follow-up touch strengthens (never weakens) what's on file.
-    if (sms_consent || marketing_consent) {
+    if (consentEvidence) {
+      const prevRaw = (existing.raw_data && typeof existing.raw_data === 'object') ? existing.raw_data as Record<string, unknown> : {};
+      const history = Array.isArray(prevRaw.consent_history) ? prevRaw.consent_history as unknown[] : [];
       await supabase.from('isa_leads').update({
         ...(sms_consent && { sms_consent: true }),
         ...(marketing_consent && { marketing_consent: true }),
         ...(consent_source && { consent_source }),
-        consent_captured_at: new Date().toISOString(),
+        consent_captured_at: consentAt,
+        raw_data: { ...prevRaw, consent_evidence: consentEvidence, consent_history: [...history, consentEvidence].slice(-20) },
       }).eq('id', leadId);
     }
   } else {
@@ -168,12 +223,15 @@ serve(async (req) => {
         source_name:          source_name ?? channel,
         source_url,
         ...(requestedBrandId && { brand_id: requestedBrandId }),
-        sms_consent:          !!sms_consent,
-        marketing_consent:    !!marketing_consent,
+        sms_consent:          sms_consent,
+        marketing_consent:    marketing_consent,
         consent_source:       consent_source ?? null,
-        consent_captured_at:  (sms_consent || marketing_consent) ? new Date().toISOString() : null,
+        consent_captured_at:  consentEvidence ? consentAt : null,
         motivation_signals:   [`Inbound ${source_name ?? channel} inquiry — auto-responded`],
-        raw_data:             { inbound_message, channel, received_at: new Date().toISOString() },
+        raw_data:             {
+          inbound_message, channel, received_at: new Date().toISOString(),
+          ...(consentEvidence && { consent_evidence: consentEvidence, consent_history: [consentEvidence] }),
+        },
       })
       .select('id')
       .single();
@@ -236,13 +294,14 @@ serve(async (req) => {
   const effectiveLeadRole = (existing?.lead_role ?? leadRoleParam) as string | null;
   const alreadyResponded = !!(existing?.first_response_at);
 
-  // Consent gate: only auto-text if the lead explicitly opted in (form
-  // checkbox passed through as sms_consent), or they texted us first —
+  // Consent gate: only auto-text if the lead gave consent (submitted a form
+  // that shows our texting notice, passed through as sms_consent=true with a
+  // notice version — no checkbox), or they texted us first —
   // replying to an inbound SMS is not the same as unsolicited outbound
   // marketing. Everything else (website/email leads with a phone number
   // but no consent flag) gets a task for a human to reach out by an
   // allowed channel instead of an automatic text.
-  const hasConsentToText = !!(existing?.sms_consent) || !!sms_consent || channel === 'sms';
+  const hasConsentToText = !!(existing?.sms_consent) || sms_consent || channel === 'sms';
 
   let claudeResult: ClaudeResult | null = null;
   if (ANTHROPIC_API_KEY) {
@@ -306,7 +365,7 @@ serve(async (req) => {
     ].filter(Boolean);
     const rentalFields: Record<string, unknown> = { isa_lead_id: leadId };
     if (move_date) rentalFields.move_date = move_date;
-    if (move_date_flexible != null) rentalFields.move_date_flexible = !!move_date_flexible;
+    if (move_date_flexible != null) rentalFields.move_date_flexible = isTruthy(move_date_flexible);
     if (target_locations) {
       rentalFields.target_locations = Array.isArray(target_locations)
         ? target_locations
@@ -318,8 +377,8 @@ serve(async (req) => {
     if (bathrooms_needed != null && bathrooms_needed !== '') rentalFields.bathrooms_needed = Number(bathrooms_needed);
     if (household_size != null && household_size !== '') rentalFields.household_size = Number(household_size);
     if (pets_description) rentalFields.pets = { description: pets_description };
-    if (parking_needed != null) rentalFields.parking_needed = !!parking_needed;
-    if (laundry_needed != null) rentalFields.laundry_needed = !!laundry_needed;
+    if (parking_needed != null) rentalFields.parking_needed = isTruthy(parking_needed);
+    if (laundry_needed != null) rentalFields.laundry_needed = isTruthy(laundry_needed);
     if (accessibility_notes) rentalFields.accessibility_notes = accessibility_notes;
     if (unit_style) rentalFields.unit_style = unit_style;
     if (tour_availability) rentalFields.tour_availability = { notes: tour_availability };
@@ -378,6 +437,8 @@ serve(async (req) => {
   return json({
     success: true, lead_id: leadId, is_new_lead: isNewLead, sms_sent: smsSent,
     sms_skipped_no_consent: !!phone && !hasConsentToText,
+    consent_recorded: !!consentEvidence, consent_notice_version: noticeVersion || null,
+    consent_notice_known: !!noticeText,
     response_text: smsText, brand: brandProfile?.slug ?? null, routing: claudeResult?.routing ?? 'new', bant_score: claudeResult?.bant_score ?? null,
   });
 });

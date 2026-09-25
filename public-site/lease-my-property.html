@@ -125,6 +125,13 @@
 
   .checkbox-row label { font-weight: 400; font-size: 14px; margin-bottom: 0; }
 
+  .consent-notice {
+    font-size: 12px;
+    color: var(--jra-muted);
+    line-height: 1.5;
+    margin: 18px 0 10px;
+  }
+
   .consent-box {
     background: var(--jra-bg);
     border: 1px solid var(--jra-border);
@@ -329,13 +336,13 @@
       </div>
     </fieldset>
 
-    <div class="consent-box">
-      <div class="checkbox-row" style="margin-bottom:0;">
-        <input type="checkbox" id="sms_consent" name="sms_consent" value="true">
-        <label for="sms_consent">I'd like to receive text updates about this property</label>
-      </div>
-      <p>By submitting, you agree that Jet Realty Advisors may contact you by your selected method about your leasing inquiry. Consent is not a condition of obtaining services. Reply STOP to opt out of text messages.</p>
-    </div>
+    <!-- Texting consent: notice only, no checkbox. Submitting the form is the
+         consent (sms_consent=true + notice version below). Keep this text in sync
+         with CONSENT_NOTICES in supabase/functions/respond-lead/index.ts. -->
+    <input type="hidden" name="sms_consent" value="true">
+    <input type="hidden" name="consent_notice_version" value="jra-web-landlord-v1-2026-09-25">
+    <input type="hidden" name="brand" value="jra">
+    <p class="consent-notice" id="jra-consent-notice">By clicking &ldquo;Get My Leasing Plan&rdquo;, you agree that Jet Realty Advisors may call and text you at the number you provided about your leasing inquiry, including texts sent with automated technology. Consent is not a condition of renting, buying, or using our services. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out at any time.</p>
 
     <button type="submit" class="submit-btn" id="jra-submit-btn">Get My Leasing Plan</button>
     <p class="jra-footnote">Jet Realty Advisors · Licensed NY &amp; NJ Real Estate Brokerage</p>

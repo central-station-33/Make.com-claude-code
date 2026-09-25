@@ -21,6 +21,15 @@ migration filenames is self-attested. The structure exists to make
 inaccurate or skipped entries cheap to spot after the fact, not to prevent
 them.
 
+## 20260925-03 — Texting consent by notice line (no checkbox)
+
+- **respond-lead v45** (verify_jwt=false, x-make-secret): accepts JSON or form-urlencoded bodies. Strict boolean parsing for `sms_consent` (string "false" no longer counts as consent; consent requires a phone). New optional field `consent_notice_version`; exact notice text per version lives in `CONSENT_NOTICES`. Proof stored in `isa_leads.raw_data.consent_evidence` + `consent_history` (timestamp, source, version, text, page, phone). Consent gate otherwise unchanged. Deployed source matches repo byte-for-byte.
+- **Make S16 (5089697)** module 2: switched body from hand-built JSON (broke on quotes/newlines, dropped consent/brand/UTM/rental fields) to form-urlencoded with 49 mapped fields, including `sms_consent`, `consent_source`, `consent_notice_version`, `brand`, UTM, and all rental/landlord detail. Modules 1, 3, 4 unchanged.
+- **public-site forms**: checkbox removed; notice line above the button; hidden `sms_consent=true`, `consent_notice_version`, `brand=jra`.
+- Tests: no secret → 401. Direct form-urlencoded call with consent → `consent_recorded=true`, notice text stored, rental detail + source event written, quote/newline preserved. Call with `sms_consent=false` → no consent, agent task created. Test rows deleted.
+- Found, not changed: S16 webhook requires `x-make-apikey` header, so plain HTML forms get "Unauthorized."; `lead_touches_channel_check` rejects `website_form`, so web-form touch rows fail silently.
+- Plan/notes: `docs/notes/2026-09-25-texting-consent-notice.md`.
+
 ## 20260925-02 — Brand-aware text signatures + brand-based access
 
 - **follow-up-cadence v40** (verify_jwt=false, x-make-secret): signature and sending number now come from the lead's brand profile (`brands.sms_signature`, `brands.sms_from_number`, fallback env TWILIO_FROM_NUMBER). Removed hardcoded "Jet Realty Advisors" / "MVP Team, Solace Leasing". Leads whose brand is missing/paused are skipped. Consent gate unchanged (sms_consent=true, sms_opt_out=false). Eligible leads at deploy: 0.
