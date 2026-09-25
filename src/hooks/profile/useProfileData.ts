@@ -1,3 +1,4 @@
+import { fetchCurrentTeamAgentId } from '@/lib/currentTeamAgent';
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -33,11 +34,10 @@ export const useProfileData = () => {
       // team_agents isn't in the generated Supabase types at all (they're
       // stale relative to the live schema, same as elsewhere in this repo),
       // so the table name has to be cast past the Tables union.
-      const { data, error } = await supabase
-        .from('team_agents' as never)
-        .select('*')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
+      const agentId = await fetchCurrentTeamAgentId();
+      const { data, error } = agentId
+        ? await supabase.from('team_agents' as never).select('*').eq('id', agentId).maybeSingle()
+        : { data: null, error: null };
 
       if (error) throw error;
       const row = data as unknown as {
@@ -76,12 +76,24 @@ export const useProfileData = () => {
 
       const { avatar_url, company, ...rest } = updates;
 
-      const { error } = await supabase
-        .from('team_agents' as never)
-        .upsert(
-          { auth_user_id: user.id, ...rest, ...(company !== undefined ? { brokerage: company } : {}) } as never,
-          { onConflict: 'auth_user_id' }
-        );
+      const fields = { ...rest, ...(company !== undefined ? { brokerage: company } : {}) };
+      // Never write identity keys from the profile form.
+      delete (fields as Record<string, unknown>).id;
+      delete (fields as Record<string, unknown>).user_id;
+      const agentId = await fetchCurrentTeamAgentId();
+      let error: { message: string } | null = null;
+      if (agentId) {
+        // Primary OR backup login: update the one shared profile.
+        ({ error } = await supabase.from('team_agents' as never).update(fields as never).eq('id', agentId));
+      } else {
+        // A disabled backup login must never spawn a second profile.
+        const { data: backupRow } = await supabase
+          .from('team_agent_logins' as never).select('team_agent_id').eq('auth_user_id', user.id).maybeSingle();
+        if (backupRow) throw new Error('This backup login is not active. Ask your broker to re-enable it.');
+        ({ error } = await supabase
+          .from('team_agents' as never)
+          .upsert({ auth_user_id: user.id, ...fields } as never, { onConflict: 'auth_user_id' }));
+      }
 
       if (error) throw error;
 

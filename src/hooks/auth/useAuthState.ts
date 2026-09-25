@@ -1,3 +1,4 @@
+import { fetchCurrentTeamAgentRole } from '@/lib/currentTeamAgent';
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,15 +32,8 @@ export const useAuthState = () => {
         // NOTE: there is no `user_roles` table in this database -- role
         // lives on `team_agents.role`, keyed by `auth_user_id`.
         if (session?.user) {
-          const { data, error } = await supabase
-            .from('team_agents')
-            .select('role')
-            .eq('auth_user_id', session.user.id)
-            .maybeSingle();
-
-          if (!error && data) {
-            setUserRole(data.role);
-          }
+          const role = await fetchCurrentTeamAgentRole().catch(() => null);
+          if (role) setUserRole(role);
         }
       } catch (error) {
         console.error('Error fetching initial session:', error);
@@ -54,15 +48,8 @@ export const useAuthState = () => {
       setSession(session);
 
       if (session?.user) {
-        const { data, error } = await supabase
-          .from('team_agents')
-          .select('role')
-          .eq('auth_user_id', session.user.id)
-          .maybeSingle();
-
-        if (!error && data) {
-          setUserRole(data.role);
-        }
+        const role = await fetchCurrentTeamAgentRole().catch(() => null);
+          if (role) setUserRole(role);
       } else {
         setUserRole(null);
       }

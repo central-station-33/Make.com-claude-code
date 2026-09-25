@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
 import { useCurrentTeamAgent } from '@/hooks/useCurrentTeamAgent';
 import InviteAgentDialog from '@/components/agents/InviteAgentDialog';
+import BackupEmailControl from '@/components/agents/BackupEmailControl';
 import { ArrowLeft, Loader2, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 interface TeamAgentRow {
@@ -16,6 +17,7 @@ interface TeamAgentRow {
   brokerage: 'highline' | 'jet_realty';
   status: 'active' | 'inactive' | 'probation';
   ytd_volume: number | null;
+  backup_email: string | null;
 }
 
 const STATUS_COLORS: Record<TeamAgentRow['status'], string> = {
@@ -35,7 +37,7 @@ export default function InRangeTeam() {
     queryFn: async (): Promise<TeamAgentRow[]> => {
       const { data, error } = await inrange
         .from('team_agents')
-        .select('id, full_name, email, phone, role, market, brokerage, status, ytd_volume')
+        .select('id, full_name, email, phone, role, market, brokerage, status, ytd_volume, backup_email')
         .order('full_name');
       if (error) throw error;
       return (data as TeamAgentRow[]) ?? [];
@@ -120,6 +122,12 @@ export default function InRangeTeam() {
                   {agent.market.toUpperCase()} · {agent.brokerage === 'jet_realty' ? 'Jet Realty Advisors' : 'Highline'}
                   {agent.ytd_volume ? ` · $${Number(agent.ytd_volume).toLocaleString()} YTD` : ''}
                 </p>
+                <BackupEmailControl
+                  teamAgentId={agent.id}
+                  mainEmail={agent.email}
+                  backupEmail={agent.backup_email}
+                  onChanged={() => queryClient.invalidateQueries({ queryKey: ['team-agents-all'] })}
+                />
               </div>
 
               <select

@@ -1,3 +1,4 @@
+import { fetchCurrentTeamAgentId } from '@/lib/currentTeamAgent';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { inrange } from '@/integrations/supabase/inrange';
@@ -25,10 +26,12 @@ export function useCurrentTeamAgent() {
     queryKey: ['current-team-agent', user?.id],
     queryFn: async (): Promise<CurrentTeamAgent | null> => {
       if (!user?.id) return null;
+      const agentId = await fetchCurrentTeamAgentId();
+      if (!agentId) return null;
       const { data, error } = await inrange
         .from('team_agents')
         .select('id, full_name, role, status')
-        .eq('auth_user_id', user.id)
+        .eq('id', agentId)
         .maybeSingle();
       if (error) throw error;
       return (data as CurrentTeamAgent) ?? null;

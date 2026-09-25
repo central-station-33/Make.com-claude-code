@@ -1,0 +1,15 @@
+-- ROLLBACK for 20260925150000_team_agent_backup_logins (run manually only if needed)
+create or replace function public.current_team_agent_id() returns uuid language sql stable security definer set search_path = public, pg_temp as $f$ select id from team_agents where auth_user_id = auth.uid(); $f$;
+create or replace function public.is_broker() returns boolean language sql stable security definer set search_path = public, pg_temp as $f$ select exists (select 1 from team_agents where auth_user_id = auth.uid() and role = 'broker'); $f$;
+create or replace function public.can_access_brand(p_brand uuid) returns boolean language sql stable security definer set search_path = public as $f$
+  select public.is_broker() or exists (select 1 from public.brand_members bm join public.team_agents ta on ta.id = bm.team_agent_id
+   where bm.brand_id = p_brand and bm.status = 'active' and ta.status = 'active' and ta.auth_user_id = auth.uid()); $f$;
+drop policy if exists "agents view own team_agents row" on public.team_agents;
+create policy "agents view own team_agents row" on public.team_agents for select to authenticated using (auth_user_id = auth.uid());
+drop policy if exists "brands read" on public.brands;
+create policy "brands read" on public.brands for select to authenticated using (is_broker() or exists (select 1 from brand_members bm join team_agents ta on ta.id = bm.team_agent_id where bm.brand_id = brands.id and bm.status = 'active' and ta.auth_user_id = auth.uid()));
+drop policy if exists "brand members read" on public.brand_members;
+create policy "brand members read" on public.brand_members for select to authenticated using (is_broker() or team_agent_id in (select id from team_agents where auth_user_id = auth.uid()));
+drop table if exists public.team_agent_logins;
+drop function if exists public.team_agent_logins_guard();
+-- team_agents.backup_email column left in place (harmless).

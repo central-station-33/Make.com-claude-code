@@ -21,6 +21,14 @@ migration filenames is self-attested. The structure exists to make
 inaccurate or skipped entries cheap to spot after the fact, not to prevent
 them.
 
+## 20260925-04 — Backup login email per agent
+
+- **DB migration `20260925150000_team_agent_backup_logins`** (prod): new `team_agent_logins` (one active backup per agent; guard blocks a primary login from also being a backup; RLS: own row read, brokers manage). `team_agents.backup_email` display column. `current_team_agent_id()` now resolves primary OR active backup login; `is_broker()` and `can_access_brand()` use it. Policies `agents view own team_agents row`, `brands read`, `brand members read` switched from `auth_user_id = auth.uid()` to the resolver. Undo script: `supabase/migrations/rollback_20260925150000_team_agent_backup_logins.sql.txt`.
+- **invite-agent v16** (verify_jwt=true): new `mode: 'backup'` `{ email, team_agent_id }` sends the Supabase invite and links it to the existing profile (no new team_agents row; withdraws the invite if linking fails). Broker check also accepts a broker's backup login. Normal invites now reject emails already used as a backup.
+- **Frontend**: `src/lib/currentTeamAgent.ts` (RPC resolver) used by both `useAuthState` hooks, `useCurrentTeamAgent`, and `useProfileData` (profile save updates the shared profile by id; a disabled backup login can no longer spawn a duplicate profile). Team page: "+ Add backup email" per agent (`BackupEmailControl.tsx`).
+- Tests (rolled back): existing broker and agent logins unchanged (200/38 leads). Simulated backup of the broker profile: resolves to broker profile, broker=true, 200 leads, 2 brands, Solace 183 units. Disabled backup: no profile, 0 leads. Primary-as-backup insert blocked. Email normalized.
+- Not yet done: live invite to j.thompson@hlresidential.com (sent from Team page while signed in as team@joinjra.com; needs a broker session).
+
 ## 20260925-03 — Texting consent by notice line (no checkbox)
 
 - **respond-lead v45** (verify_jwt=false, x-make-secret): accepts JSON or form-urlencoded bodies. Strict boolean parsing for `sms_consent` (string "false" no longer counts as consent; consent requires a phone). New optional field `consent_notice_version`; exact notice text per version lives in `CONSENT_NOTICES`. Proof stored in `isa_leads.raw_data.consent_evidence` + `consent_history` (timestamp, source, version, text, page, phone). Consent gate otherwise unchanged. Deployed source matches repo byte-for-byte.
