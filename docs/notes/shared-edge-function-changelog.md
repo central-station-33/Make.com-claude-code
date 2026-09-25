@@ -34,7 +34,7 @@ target-type: migration
 target-id: 20260925120000_brand_profiles.sql (applied to prod as brand_profiles_part1 + brand_profiles_part2)
 window-check: yes
 artifact: supabase-migration:brand_profiles_part1, brand_profiles_part2
-commit: (this commit)
+commit: 65a81cb
 status: done
 related-entries: entry-20260924-11
 
