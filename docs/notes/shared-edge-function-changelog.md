@@ -28,7 +28,7 @@ them.
 - **Migration brand_access** (prod + test branch): `can_access_brand(uuid)` (security definer, authenticated only) and RESTRICTIVE "brand isolation" policies on isa_leads, properties, rental_units, exclusive_properties. Agents only see/write rows in brands where they have an active brand_members row; brokers unaffected; service role unaffected.
 - Frontend: Add Lead and CSV import tag new properties with the active brand.
 - Tests: branch fixture test (HLR-only agent 2/5 leads, cannot insert or move a lead into JRA; dual-brand agent 3; broker 6; anon 0; anon cannot call can_access_brand). Prod rolled-back check: broker 199 leads/924 properties/196 units/1 exclusive (unchanged); James agent 37 leads, 2 brands. Both functions return 401 without the secret.
-- commit: (this commit)
+- commit: 0d99b86
 
 ## Entry format (entries dated 2026-09-23T16:00Z or later)
 
