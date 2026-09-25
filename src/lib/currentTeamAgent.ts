@@ -29,3 +29,28 @@ export async function fetchCurrentTeamAgentRole(): Promise<string | null> {
   if (error || !data) return null;
   return (data as { role?: string }).role ?? null;
 }
+
+/**
+ * Turn a supabase.functions.invoke error into the function's own message.
+ * On non-2xx, supabase-js only says "Edge Function returned a non-2xx status
+ * code"; the real `{ error }` JSON is on `error.context` (a Response).
+ */
+export async function functionErrorMessage(error: unknown, fallback = 'Something went wrong'): Promise<string> {
+  const ctx = (error as { context?: unknown })?.context;
+  if (ctx && typeof (ctx as Response).clone === 'function') {
+    try {
+      const body = await (ctx as Response).clone().json();
+      const raw = String(body?.error ?? body?.message ?? '');
+      if (raw) return friendlyEmailError(raw);
+    } catch { /* not JSON */ }
+  }
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function friendlyEmailError(raw: string): string {
+  if (/domain is not verified/i.test(raw)) {
+    return 'Email could not be sent: the sending domain is not verified in Resend yet. Verify it at resend.com/domains, then try again.';
+  }
+  if (/rate limit/i.test(raw)) return 'Too many emails sent in the last hour. Please try again later.';
+  return raw;
+}

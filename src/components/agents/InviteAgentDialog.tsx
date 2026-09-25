@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { inrange } from "@/integrations/supabase/inrange";
 import { UserPlus, Loader2 } from "lucide-react";
+import { functionErrorMessage } from '@/lib/currentTeamAgent';
 
 interface InviteAgentDialogProps {
   open?: boolean;
@@ -50,7 +51,7 @@ const InviteAgentDialog = ({ open, onOpenChange, onInvited }: InviteAgentDialogP
           role,
         },
       });
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error));
       if (data && data.success === false) throw new Error(data.error || "Invite failed");
       return data;
     },

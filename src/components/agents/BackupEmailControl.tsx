@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { inrange } from '@/integrations/supabase/inrange';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mail } from 'lucide-react';
+import { functionErrorMessage } from '@/lib/currentTeamAgent';
 
 interface Props {
   /** Omit to add a backup to the signed-in user's own profile. */
@@ -30,7 +31,7 @@ export default function BackupEmailControl({ teamAgentId, mainEmail, backupEmail
       const { data, error } = await inrange.functions.invoke('invite-agent', {
         body: { mode: 'backup', email: clean, ...(teamAgentId ? { team_agent_id: teamAgentId } : {}) },
       });
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error));
       if (data && data.success === false) throw new Error(data.error || 'Invite failed');
       return clean;
     },
