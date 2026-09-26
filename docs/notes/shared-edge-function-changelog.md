@@ -21,6 +21,13 @@ migration filenames is self-attested. The structure exists to make
 inaccurate or skipped entries cheap to spot after the fact, not to prevent
 them.
 
+## 20260926-01 — Backup logins recognized by send-sms and enrich-properties-batch; guard-function hardening
+
+- **send-sms v5** and **enrich-properties-batch v5** (both verify_jwt=true): caller lookup now resolves the main login OR an active backup login (`team_agent_logins`), matching `current_team_agent_id()`. Before this, a backup login got "No team_agents record" (send-sms) or "Only a broker/admin" (enrich-properties-batch). No other behavior changed. Pre-deploy: live v4 matched repo byte-for-byte; post-deploy v5 matches repo byte-for-byte; `deno check` clean; no-auth POST returns 401.
+- **DB migration `20260926210000_revoke_team_agent_logins_guard_execute`** (prod, user-approved 2026-09-26): revoked direct EXECUTE on trigger function `team_agent_logins_guard()` from public/anon/authenticated (advisor lints 0028/0029). Undo: `supabase/migrations/rollback_20260926210000_revoke_team_agent_logins_guard_execute.sql.txt`.
+- Tests (rolled back): active backup of broker profile resolves role=broker; disabled backup resolves to nothing. After the revoke: anon/authenticated EXECUTE = false; broker insert of a backup login still works (trigger fires, email lowercased); primary-as-backup still blocked; direct RPC call blocked (42501).
+- Also in the 2026-09-26 review: frontend commit 7777e15 (invite errors show the function's real message, e.g. Resend domain not verified) is live on inrange.jetreadvisors.com.
+
 ## 20260925-05 — Agents add their own backup email
 
 - **invite-agent v17** (verify_jwt=true): `mode: 'backup'` now allowed for any ACTIVE agent signed in with their MAIN login, for their own profile only (`team_agent_id` optional, defaults to caller). Brokers can still add for any agent. A backup login is refused ("sign in with your main email"). Normal agent invites remain broker-only. Deployed source matches repo byte-for-byte; no-auth call returns 401.

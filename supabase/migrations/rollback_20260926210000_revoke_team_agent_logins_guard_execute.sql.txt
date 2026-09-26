@@ -1,0 +1,1 @@
+-- Undo: grant execute on function public.team_agent_logins_guard() to public, anon, authenticated;

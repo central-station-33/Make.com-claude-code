@@ -101,6 +101,27 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Resolve the caller's team_agents row from their main login OR an active
+// backup login (team_agent_logins), matching public.current_team_agent_id().
+// Added 2026-09-26 (changelog 20260926-01).
+async function resolveCallerAgent(
+  supabase: ReturnType<typeof serviceClient>,
+  authUserId: string,
+  columns: string,
+): Promise<{ data: Record<string, any> | null; error: { message: string } | null }> {
+  const primary = await supabase.from('team_agents').select(columns).eq('auth_user_id', authUserId).maybeSingle();
+  if (primary.error || primary.data) return primary as never;
+  const login = await supabase
+    .from('team_agent_logins')
+    .select('team_agent_id')
+    .eq('auth_user_id', authUserId)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (login.error) return { data: null, error: login.error };
+  if (!login.data) return { data: null, error: null };
+  return await supabase.from('team_agents').select(columns).eq('id', login.data.team_agent_id).maybeSingle() as never;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return json({}, 200);
   if (req.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
@@ -114,11 +135,7 @@ serve(async (req) => {
   const { data: callerData, error: callerErr } = await supabase.auth.getUser(callerToken);
   if (callerErr || !callerData?.user) return json({ success: false, error: 'Invalid session' }, 401);
 
-  const { data: callerAgent, error: agentErr } = await supabase
-    .from('team_agents')
-    .select('id, role')
-    .eq('auth_user_id', callerData.user.id)
-    .maybeSingle();
+  const { data: callerAgent, error: agentErr } = await resolveCallerAgent(supabase, callerData.user.id, 'id, role');
 
   if (agentErr) return json({ success: false, error: agentErr.message }, 500);
   if (!callerAgent || callerAgent.role !== 'broker') {
