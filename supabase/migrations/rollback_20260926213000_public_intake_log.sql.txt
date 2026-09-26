@@ -1,0 +1,2 @@
+-- Undo 20260926213000_public_intake_log (deletes the spam log only; no lead data)
+drop table if exists public.public_intake_log;

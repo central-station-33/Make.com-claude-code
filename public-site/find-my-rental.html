@@ -287,7 +287,12 @@
     Something went wrong submitting your request. Please try again, or call us directly.
   </div>
 
-  <form id="jra-rental-form" action="https://hook.us2.make.com/rnad6pwvp8gpnw3hwcqmc852k13fqaha" method="POST" target="jra-hidden-frame">
+  <form id="jra-rental-form" action="https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/public-lead-intake" method="POST">
+    <input type="hidden" name="form_loaded_at" id="jra-form-loaded-at" value="">
+    <div class="jra-hp" aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;">
+      <label for="jra-website">Leave this field empty</label>
+      <input type="text" id="jra-website" name="website" tabindex="-1" autocomplete="off" value="">
+    </div>
     <!-- Routing / attribution — not shown to the user -->
     <input type="hidden" name="segment" value="renter">
     <input type="hidden" name="module" value="rental_leasing">
@@ -445,8 +450,6 @@
   </div>
 </div>
 
-<iframe name="jra-hidden-frame" style="display:none;" title="form submission"></iframe>
-
 <script>
 (function () {
   // Capture UTM params, landing page, and referrer at load — silent no-ops
@@ -472,14 +475,20 @@
   var thankYou = document.getElementById('jra-thankyou');
   var errorBanner = document.getElementById('jra-error-banner');
   var submitBtn = document.getElementById('jra-submit-btn');
-  var iframe = document.querySelector('iframe[name="jra-hidden-frame"]');
-  // The iframe fires its own 'load' event once just from existing on the
-  // page (loading about:blank), before any submission — this flag is what
-  // tells that apart from the real post-submit load.
-  var formWasSubmitted = false;
+  var submitLabel = submitBtn.textContent;
 
-  // Combine first/last name into the single `name` field respond-lead expects.
-  form.addEventListener('submit', function () {
+  // Stamp when the form was shown (spam check: real people take more than a few seconds).
+  document.getElementById('jra-form-loaded-at').value = String(Date.now());
+
+  function showError(msg) {
+    errorBanner.textContent = msg || 'Something went wrong. Please try again.';
+    errorBanner.style.display = 'block';
+    submitBtn.disabled = false;
+    submitBtn.textContent = submitLabel;
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
     var first = document.getElementById('first_name').value.trim();
     var last = document.getElementById('last_name').value.trim();
     var hiddenName = form.querySelector('input[name="name"]');
@@ -490,22 +499,22 @@
       form.appendChild(hiddenName);
     }
     hiddenName.value = (first + ' ' + last).trim();
-
     submitBtn.disabled = true;
     submitBtn.textContent = 'Submitting…';
     errorBanner.style.display = 'none';
-    formWasSubmitted = true;
 
-    // The iframe target means the browser navigates the hidden iframe, not
-    // this page — no CORS restriction applies to the submission itself.
-    // We can't read the response, so the iframe's next load event (now
-    // that formWasSubmitted is true) is treated as "delivered".
-  });
-
-  iframe.addEventListener('load', function () {
-    if (!formWasSubmitted) return; // the iframe's own initial blank load
-    form.style.display = 'none';
-    thankYou.style.display = 'block';
+    fetch(form.action, { method: 'POST', body: new URLSearchParams(new FormData(form)) })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (res.ok && data.success) {
+            form.style.display = 'none';
+            thankYou.style.display = 'block';
+          } else {
+            showError(data.error);
+          }
+        });
+      })
+      .catch(function () { showError('We could not reach our server. Please check your connection and try again.'); });
   });
 })();
 </script>

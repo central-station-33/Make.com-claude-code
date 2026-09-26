@@ -55,5 +55,5 @@ When the Meta lead connector is built, it must send to `respond-lead`: `sms_cons
 
 ## Known blockers (not changed, need decisions)
 
-- The S16 Make webhook requires an `x-make-apikey` header. A plain HTML form cannot send custom headers, so the public forms currently get "Unauthorized." and never reach `respond-lead`.
+- ~~The S16 Make webhook requires an `x-make-apikey` header.~~ Resolved 2026-09-26: forms now submit to `public-lead-intake` (spam checks, then forwards to `respond-lead`). See `public-site/README.md`.
 - `lead_touches.channel` only allows call/sms/email/dm/voicemail/mailer. Web-form leads use `channel=website_form`, so their touch log row fails silently.

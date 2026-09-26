@@ -9,38 +9,34 @@ no external requests except the actual form submission.
 
 ## How they submit
 
-Both POST directly (native HTML form submission, not `fetch`) to the same
-public Make.com webhook already used by every other inbound-lead channel:
+Updated 2026-09-26 (changelog 20260926-02). Both forms send with `fetch`
+(form-urlencoded, no custom headers) to the public Supabase Edge Function:
 
 ```
-https://hook.us2.make.com/rnad6pwvp8gpnw3hwcqmc852k13fqaha
+https://omzugrtgwsjypekuzgtn.supabase.co/functions/v1/public-lead-intake
 ```
 
-The submission targets a hidden `<iframe>` on the page instead of navigating
-away, so the visitor never leaves `jetreadvisors.com` and never sees Make's
-raw response. This also means the browser never needs to *read* Make's
-response across origins — only a same-origin-agnostic form POST, which
-isn't subject to CORS at all — so there's nothing to configure on Make's
-side and nothing that can silently fail due to a missing CORS header.
+They used to POST to the Make S16 webhook, but that webhook requires an
+`x-make-apikey` header a browser form cannot send, so every submission failed.
 
-Make (scenario **S16: Inbound Lead Fast Response**) receives the submission,
-forwards it server-side (with the `x-make-secret` auth header, never exposed
-to the browser) to the `respond-lead` Edge Function, which:
+`public-lead-intake` checks, in order: the page's origin (jetreadvisors.com,
+www.jetreadvisors.com, joinjra.com, www.joinjra.com, inrange.jetreadvisors.com;
+more via the `PUBLIC_INTAKE_ALLOWED_ORIGINS` secret), body size and an allowed
+field list, a hidden honeypot field `website`, a `form_loaded_at` timestamp
+(must be at least 3 seconds old), and rate limits (5 per visitor per 10 minutes,
+20 per day, 3 per phone/email per hour). Spam gets a fake "thank you" and is not
+saved as a lead. Real submissions are forwarded server-side to `respond-lead`
+(same fields and secret as S16) and then `notify-isa`. The page shows the thank
+-you message only when the server confirms, and shows the real error otherwise.
 
-- finds-or-creates the lead in `isa_leads` (deduped by phone/email),
-- tags it `module=rental_leasing`, `lead_role=renter` or `landlord`,
-- writes the structured detail into `rental_inquiries` or `landlord_leads`,
-- records a `lead_source_events` row for UTM/campaign attribution,
-- treats submitting the form as texting consent: there is **no checkbox**.
-  A notice line sits directly above the submit button, and hidden inputs send
-  `sms_consent=true`, `consent_source`, and `consent_notice_version`. The Edge
-  Function stores the exact notice wording for that version, the form source,
-  and the timestamp on the lead as proof of consent,
-- only sends an automatic SMS when that consent is present (or the lead texted
-  in first) and a phone number was given — otherwise creates a `lead_tasks`
-  row for an agent to reach out manually. Every first text ends with
-  "Reply STOP to opt out.",
-- always brands the response "Jet Realty Advisors", never "InRange".
+Keep these in the form when editing: `<input name="website">` inside the
+hidden `.jra-hp` block, `<input name="form_loaded_at" id="jra-form-loaded-at">`,
+and the page script that fills it.
+
+If the form is published on a new domain, add that domain to
+`PUBLIC_INTAKE_ALLOWED_ORIGINS` (comma-separated, e.g.
+`https://newsite.com,https://www.newsite.com`) in Supabase → Edge Functions →
+Secrets, or the form will say it can only be submitted from our website.
 
 ## Before this goes live
 

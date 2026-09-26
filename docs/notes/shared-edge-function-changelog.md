@@ -21,6 +21,15 @@ migration filenames is self-attested. The structure exists to make
 inaccurate or skipped entries cheap to spot after the fact, not to prevent
 them.
 
+## 20260926-02 — Website forms go through public-lead-intake (spam protection)
+
+- **New Edge Function `public-lead-intake` v1** (verify_jwt=false, public by design; no secret reaches the browser). Checks: Origin allowlist (jetreadvisors.com, www., joinjra.com, www., inrange.jetreadvisors.com, plus optional secret `PUBLIC_INTAKE_ALLOWED_ORIGINS`), 20 KB body cap, field allowlist = the 49 fields Make S16 module 2 sends, per-field length caps, honeypot `website`, `form_loaded_at` >= 3 s and < 24 h, rate limits (hashed IP 5/10 min and 20/day; hashed phone-or-email 3/hour; fails open if the log table errors). Honeypot/too-fast get a fake success. Accepted → POST `respond-lead` (x-make-secret, form-urlencoded, channel forced to `website_form`) → POST `notify-isa` `{limit:1}` (same as S16 module 3). Deployed source matches repo byte-for-byte.
+- **DB migration `20260926213000_public_intake_log`** (prod): `public_intake_log` (hashed IP/contact only, outcome, detail). RLS on, no policies, anon/authenticated revoked. Undo: `supabase/migrations/rollback_20260926213000_public_intake_log.sql.txt`.
+- **public-site forms**: action → `public-lead-intake`; submit via `fetch`, thank-you only on confirmed success, real error shown otherwise; honeypot + `form_loaded_at` added; hidden iframe removed. Must be re-pasted into WordPress.
+- **Make S16 unchanged** (still serves the other inbound channels).
+- Tests: no Origin → 403; other Origin → 403; honeypot → fake 200, nothing saved; too fast / no timestamp → fake 200, nothing saved; no name → 400; bad contact → 400; CORS echoes allowed origin. Real renter submission → lead (rental_leasing/renter/jra) + rental_inquiries with quote/newline preserved; repeat submission deduped to same lead; 4th in an hour → 429. Real landlord submission (www origin) → landlord_leads + lead_source_events (website_form, UTM, landing page). All test leads, child rows and log rows deleted. No hot leads were pending, so notify-isa sent nothing.
+- Found, not changed: `respond-lead` creates no agent task for an email-only lead (tasks only when a phone exists but can't be texted).
+
 ## 20260926-01 — Backup logins recognized by send-sms and enrich-properties-batch; guard-function hardening
 
 - **send-sms v5** and **enrich-properties-batch v5** (both verify_jwt=true): caller lookup now resolves the main login OR an active backup login (`team_agent_logins`), matching `current_team_agent_id()`. Before this, a backup login got "No team_agents record" (send-sms) or "Only a broker/admin" (enrich-properties-batch). No other behavior changed. Pre-deploy: live v4 matched repo byte-for-byte; post-deploy v5 matches repo byte-for-byte; `deno check` clean; no-auth POST returns 401.
